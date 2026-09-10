@@ -1,0 +1,7 @@
+PROJECT|Portfolio Desktop App|A JavaFX application that presents my work, research and achievements, with an owner-only editing mode and a bKash donation flow.||https://github.com/yourusername/portfolio-app|2026
+PROJECT|Library Management System|Java and MySQL system for issuing, returning and tracking books, with overdue fine calculation and monthly reports.|||2025
+RESEARCH|Bangla Text Summarisation with Transformer Models|Comparing fine-tuned multilingual transformers on a hand-annotated Bangla news corpus. Draft submitted to a local conference.|COMPLETED||2025
+RESEARCH|Flood Prediction for the Khulna Delta|Building a rainfall and tide dataset and testing gradient boosted trees against an LSTM baseline.|ONGOING||2026
+RESEARCH|Energy Aware Scheduling on Edge Devices|Planned study on scheduling heuristics that trade latency against battery drain on ARM boards.|NOT_STARTED||2026
+ACHIEVEMENT|Dean's List|Awarded for academic performance in the top decile of the cohort.|||2025
+ACHIEVEMENT|Inter-University Hackathon Finalist|Placed in the final six out of ninety teams with a flood alert prototype.|||2024
