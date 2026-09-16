@@ -55,20 +55,40 @@ public class Item {
         }
     }
 
+    private Integer id;
     private Type type;
     private String title;
     private String description;
     private Status status;
     private String link;
     private String year;
+    private String imagePath;
+    private String pdfPath;
 
-    public Item(Type type, String title, String description, Status status, String link, String year) {
+    public Item(Type type, String title, String description, Status status, String link, String year,
+                String imagePath, String pdfPath) {
         this.type = type;
         this.title = title == null ? "" : title;
         this.description = description == null ? "" : description;
         this.status = status;
         this.link = link == null ? "" : link;
         this.year = year == null ? "" : year;
+        this.imagePath = imagePath == null ? "" : imagePath;
+        this.pdfPath = pdfPath == null ? "" : pdfPath;
+    }
+
+    /** Convenience constructor for entries with no photo or PDF attached. */
+    public Item(Type type, String title, String description, Status status, String link, String year) {
+        this(type, title, description, status, link, year, "", "");
+    }
+
+    /** The database row id. Null until the item has been saved via Store. */
+    public Integer getId() {
+        return id;
+    }
+
+    public void setId(Integer id) {
+        this.id = id;
     }
 
     public Type getType() {
@@ -117,6 +137,24 @@ public class Item {
 
     public void setYear(String year) {
         this.year = year;
+    }
+
+    /** Path to an attached photo, or "" if none was added. */
+    public String getImagePath() {
+        return imagePath;
+    }
+
+    public void setImagePath(String imagePath) {
+        this.imagePath = imagePath == null ? "" : imagePath;
+    }
+
+    /** Path to an attached PDF, or "" if none was added. */
+    public String getPdfPath() {
+        return pdfPath;
+    }
+
+    public void setPdfPath(String pdfPath) {
+        this.pdfPath = pdfPath == null ? "" : pdfPath;
     }
 
     /** Used by the search bar. An empty query matches everything. */

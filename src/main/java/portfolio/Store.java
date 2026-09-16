@@ -13,6 +13,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
 import java.time.LocalDateTime;
 import java.util.IdentityHashMap;
 import java.util.Map;
@@ -88,6 +89,30 @@ public class Store {
                             "posted_at TEXT NOT NULL" +
                             ")");
         }
+        // Added after the tables above already shipped: bring an existing database
+        // up to date instead of requiring people to delete data/portfolio.db.
+        ensureColumn(conn, "items", "image_path", "TEXT");
+        ensureColumn(conn, "items", "pdf_path", "TEXT");
+        ensureColumn(conn, "comments", "item_id", "INTEGER");
+    }
+
+    /** Adds a column to an existing table if it isn't already there. SQLite has no "ADD COLUMN IF NOT EXISTS". */
+    private void ensureColumn(Connection conn, String table, String column, String sqlType) throws SQLException {
+        boolean exists = false;
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("PRAGMA table_info(" + table + ")")) {
+            while (rs.next()) {
+                if (column.equalsIgnoreCase(rs.getString("name"))) {
+                    exists = true;
+                    break;
+                }
+            }
+        }
+        if (!exists) {
+            try (Statement st = conn.createStatement()) {
+                st.execute("ALTER TABLE " + table + " ADD COLUMN " + column + " " + sqlType);
+            }
+        }
     }
 
     // ------------------------------------------------------------- loading
@@ -95,7 +120,8 @@ public class Store {
     private void loadItems(Connection conn) throws SQLException {
         items.clear();
         itemIds.clear();
-        String sql = "SELECT id, type, title, description, status, link, year FROM items ORDER BY id";
+        String sql = "SELECT id, type, title, description, status, link, year, image_path, pdf_path " +
+                "FROM items ORDER BY id";
         try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
             while (rs.next()) {
                 try {
@@ -104,9 +130,12 @@ public class Store {
                     Item.Status status = (rawStatus == null || rawStatus.isBlank())
                             ? null : Item.Status.valueOf(rawStatus);
                     Item item = new Item(type, rs.getString("title"), rs.getString("description"),
-                            status, rs.getString("link"), rs.getString("year"));
+                            status, rs.getString("link"), rs.getString("year"),
+                            rs.getString("image_path"), rs.getString("pdf_path"));
+                    int id = rs.getInt("id");
+                    item.setId(id);
                     items.add(item);
-                    itemIds.put(item, rs.getInt("id"));
+                    itemIds.put(item, id);
                 } catch (Exception badRow) {
                     System.err.println("Skipping unreadable item row: " + badRow.getMessage());
                 }
@@ -117,12 +146,14 @@ public class Store {
     private void loadComments(Connection conn) throws SQLException {
         comments.clear();
         commentIds.clear();
-        String sql = "SELECT id, author, text, posted_at FROM comments ORDER BY id DESC";
+        String sql = "SELECT id, author, text, posted_at, item_id FROM comments ORDER BY id DESC";
         try (Statement st = conn.createStatement(); ResultSet rs = st.executeQuery(sql)) {
             while (rs.next()) {
                 try {
                     LocalDateTime when = LocalDateTime.parse(rs.getString("posted_at"));
-                    Comment comment = new Comment(rs.getString("author"), rs.getString("text"), when);
+                    int rawItemId = rs.getInt("item_id");
+                    Integer itemId = rs.wasNull() ? null : rawItemId;
+                    Comment comment = new Comment(rs.getString("author"), rs.getString("text"), when, itemId);
                     comments.add(comment);
                     commentIds.put(comment, rs.getInt("id"));
                 } catch (Exception badRow) {
@@ -135,8 +166,8 @@ public class Store {
     // ---------------------------------------------------------------- items
 
     public void addItem(Item item) {
-        String sql = "INSERT INTO items (type, title, description, status, link, year) " +
-                "VALUES (?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO items (type, title, description, status, link, year, image_path, pdf_path) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection conn = connect();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, item.getType().name());
@@ -145,10 +176,14 @@ public class Store {
             ps.setString(4, item.getStatus() == null ? null : item.getStatus().name());
             ps.setString(5, item.getLink());
             ps.setString(6, item.getYear());
+            ps.setString(7, item.getImagePath());
+            ps.setString(8, item.getPdfPath());
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) {
-                    itemIds.put(item, keys.getInt(1));
+                    int id = keys.getInt(1);
+                    itemIds.put(item, id);
+                    item.setId(id);
                 }
             }
             items.add(item);
@@ -179,7 +214,8 @@ public class Store {
             addItem(item);
             return;
         }
-        String sql = "UPDATE items SET type=?, title=?, description=?, status=?, link=?, year=? WHERE id=?";
+        String sql = "UPDATE items SET type=?, title=?, description=?, status=?, link=?, year=?, " +
+                "image_path=?, pdf_path=? WHERE id=?";
         try (Connection conn = connect(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, item.getType().name());
             ps.setString(2, item.getTitle());
@@ -187,7 +223,9 @@ public class Store {
             ps.setString(4, item.getStatus() == null ? null : item.getStatus().name());
             ps.setString(5, item.getLink());
             ps.setString(6, item.getYear());
-            ps.setInt(7, id);
+            ps.setString(7, item.getImagePath());
+            ps.setString(8, item.getPdfPath());
+            ps.setInt(9, id);
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("Could not update item: " + e.getMessage());
@@ -197,12 +235,17 @@ public class Store {
     // ------------------------------------------------------------- comments
 
     public void addComment(Comment comment) {
-        String sql = "INSERT INTO comments (author, text, posted_at) VALUES (?, ?, ?)";
+        String sql = "INSERT INTO comments (author, text, posted_at, item_id) VALUES (?, ?, ?, ?)";
         try (Connection conn = connect();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, comment.getAuthor());
             ps.setString(2, comment.getText());
             ps.setString(3, comment.getPostedAt().toString());
+            if (comment.getItemId() == null) {
+                ps.setNull(4, Types.INTEGER);
+            } else {
+                ps.setInt(4, comment.getItemId());
+            }
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) {
