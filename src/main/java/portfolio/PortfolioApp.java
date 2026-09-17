@@ -79,14 +79,14 @@ public class PortfolioApp extends Application {
     private static final String MY_TAGLINE = "Computer Science Undergraduate · Developer · Researcher";
     private static final String MY_ABOUT =
             "I build software and study problems that sit close to real life. "
-                    + "Most of my work is in Java and Python, with a growing interest in "
-                    + "applied machine learning for climate and language data. I like projects "
+                    + "Most of my work is in C++, Dart and Python, with a growing interest in "
+                    + "applied machine learning and language data and developing desktop and mobile apps. I like projects "
                     + "that ship, papers that answer a narrow question well, and code that the "
                     + "next person can read.";
 
     private static final String GITHUB_URL = "https://github.com/Debanjon-Roy";
     private static final String LINKEDIN_URL = "https://www.linkedin.com/in/yourusername";
-    private static final String EMAIL = "roy2307001@gmail.com";
+    private static final String EMAIL = "roydebanjon2004@gmail.com";
     private static final String WHATSAPP_NUMBER = "8801741816336"; // country code, no + and no spaces
 
     private static final Path ATTACHMENTS_DIR = Paths.get("data", "attachments");
@@ -126,12 +126,12 @@ public class PortfolioApp extends Application {
         achievementsBox = new VBox(14);
         commentsBox = new VBox(12);
 
-        VBox researchSection = buildItemSection("Research Work", researchBox);
+        VBox researchSection = buildItemSection("Research Work", researchBox, Item.Type.RESEARCH);
         researchSection.getChildren().add(1, buildStatusLegend());
 
         Node aboutSection = buildAbout();
-        Node projectsSection = buildItemSection("Projects", projectsBox);
-        Node achievementsSection = buildItemSection("Achievements", achievementsBox);
+        Node projectsSection = buildItemSection("Projects", projectsBox, Item.Type.PROJECT);
+        Node achievementsSection = buildItemSection("Achievements", achievementsBox, Item.Type.ACHIEVEMENT);
         Node donateSection = buildDonate();
         Node contactSection = buildContact();
         Node commentsSection = buildComments();
@@ -208,8 +208,10 @@ public class PortfolioApp extends Application {
 
         Button add = new Button("+");
         add.getStyleClass().add("add-button");
-        add.setTooltip(new Tooltip("Add a project, research paper or achievement (owner only)"));
+        add.setTooltip(new Tooltip("Add a project, research paper or achievement"));
         add.setOnAction(e -> onAddClicked());
+        add.visibleProperty().bind(ownerMode);
+        add.managedProperty().bind(ownerMode);
 
         Button lock = new Button();
         lock.getStyleClass().add("ghost-button");
@@ -313,10 +315,30 @@ public class PortfolioApp extends Application {
 
     // ------------------------------------------------------ item sections
 
-    private VBox buildItemSection(String title, VBox listBox) {
+    private VBox buildItemSection(String title, VBox listBox, Item.Type type) {
         VBox section = new VBox(14);
         section.getStyleClass().add("section");
-        section.getChildren().addAll(sectionTitle(title), listBox);
+
+        Label heading = sectionTitle(title);
+
+        Button addButton = new Button("+ Add");
+        addButton.getStyleClass().add("ghost-button");
+        addButton.visibleProperty().bind(ownerMode);
+        addButton.managedProperty().bind(ownerMode);
+        addButton.setOnAction(e -> {
+            if (!ownerMode.get() && !requestLogin()) {
+                return;
+            }
+            showAddDialog(type);
+        });
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        HBox headerRow = new HBox(10, heading, spacer, addButton);
+        headerRow.setAlignment(Pos.CENTER_LEFT);
+
+        section.getChildren().addAll(headerRow, listBox);
         return section;
     }
 
@@ -884,7 +906,7 @@ public class PortfolioApp extends Application {
         if (!ownerMode.get() && !requestLogin()) {
             return;
         }
-        showAddDialog();
+        showAddDialog(null);
     }
 
     private boolean requestLogin() {
@@ -914,9 +936,10 @@ public class PortfolioApp extends Application {
         return false;
     }
 
-    private void showAddDialog() {
+    /** presetType pre-selects the Type dropdown (e.g. when opened from a specific section's "+ Add"); null defaults to Project. */
+    private void showAddDialog(Item.Type presetType) {
         ComboBox<Item.Type> type = new ComboBox<>(FXCollections.observableArrayList(Item.Type.values()));
-        type.setValue(Item.Type.PROJECT);
+        type.setValue(presetType != null ? presetType : Item.Type.PROJECT);
         type.setMaxWidth(Double.MAX_VALUE);
 
         TextField title = new TextField();
