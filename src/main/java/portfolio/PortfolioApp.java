@@ -1,8 +1,11 @@
 package portfolio;
 
+import javafx.animation.FadeTransition;
 import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
 import javafx.animation.KeyValue;
+import javafx.animation.ParallelTransition;
+import javafx.animation.ScaleTransition;
 import javafx.animation.Timeline;
 import javafx.application.Application;
 import javafx.beans.binding.Bindings;
@@ -22,6 +25,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Dialog;
+import javafx.scene.control.DialogPane;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
@@ -29,6 +33,7 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
+import javafx.scene.effect.Glow;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.input.MouseEvent;
@@ -36,6 +41,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
@@ -69,7 +75,7 @@ public class PortfolioApp extends Application {
 
     // ----------------------------------------------------- personal details
     // Edit these six lines and the app is yours.
-    private static final String MY_NAME = "Your Name";
+    private static final String MY_NAME = "Debanjon Roy";
     private static final String MY_TAGLINE = "Computer Science Undergraduate · Developer · Researcher";
     private static final String MY_ABOUT =
             "I build software and study problems that sit close to real life. "
@@ -78,10 +84,10 @@ public class PortfolioApp extends Application {
                     + "that ship, papers that answer a narrow question well, and code that the "
                     + "next person can read.";
 
-    private static final String GITHUB_URL = "https://github.com/yourusername";
+    private static final String GITHUB_URL = "https://github.com/Debanjon-Roy";
     private static final String LINKEDIN_URL = "https://www.linkedin.com/in/yourusername";
-    private static final String EMAIL = "you@example.com";
-    private static final String WHATSAPP_NUMBER = "8801XXXXXXXXX"; // country code, no + and no spaces
+    private static final String EMAIL = "roy2307001@gmail.com";
+    private static final String WHATSAPP_NUMBER = "8801741816336"; // country code, no + and no spaces
 
     private static final Path ATTACHMENTS_DIR = Paths.get("data", "attachments");
 
@@ -103,6 +109,12 @@ public class PortfolioApp extends Application {
     private Stage stage;
     private Scene scene;
     private BorderPane mainRoot;
+
+    // The current page (main or a detail page) lives inside pageHost; cursorLayer sits on
+    // top of it always, so the cursor trail survives swapping between pages.
+    private StackPane pageHost;
+    private Pane cursorLayer;
+    private long lastTrailSpawn;
 
     @Override
     public void start(Stage stage) {
@@ -153,11 +165,20 @@ public class PortfolioApp extends Application {
         ownerMode.addListener((obs, oldValue, newValue) -> refresh());
         refresh();
 
-        scene = new Scene(mainRoot, 1060, 780);
+        pageHost = new StackPane(mainRoot);
+
+        cursorLayer = new Pane();
+        cursorLayer.setMouseTransparent(true);
+
+        StackPane sceneRoot = new StackPane(pageHost, cursorLayer);
+
+        scene = new Scene(sceneRoot, 1060, 780);
         URL css = getClass().getResource("/style.css");
         if (css != null) {
             scene.getStylesheets().add(css.toExternalForm());
         }
+        scene.setOnMouseMoved(e -> spawnCursorGlow(e.getSceneX(), e.getSceneY()));
+        scene.setOnMouseClicked(e -> spawnClickRipple(e.getSceneX(), e.getSceneY()));
 
         stage.setTitle(MY_NAME + " — Portfolio");
         stage.setMinWidth(860);
@@ -398,13 +419,69 @@ public class PortfolioApp extends Application {
         detailRoot.setTop(header);
         detailRoot.setCenter(detailScroller);
 
-        scene.setRoot(detailRoot);
+        pageHost.getChildren().setAll(detailRoot);
     }
 
     /** Swaps the window's content back to the main page. */
     private void showMain() {
-        scene.setRoot(mainRoot);
+        pageHost.getChildren().setAll(mainRoot);
         refresh();
+    }
+
+    // ------------------------------------------------------- cursor effects
+
+    /** Drops a small glowing dot at the cursor that quickly fades and shrinks, leaving a trail. */
+    private void spawnCursorGlow(double sceneX, double sceneY) {
+        long now = System.currentTimeMillis();
+        if (now - lastTrailSpawn < 35) {
+            return;
+        }
+        lastTrailSpawn = now;
+
+        Circle dot = new Circle(4, Color.web("#FFD54F", 0.85));
+        dot.setEffect(new Glow(0.8));
+        dot.setLayoutX(sceneX);
+        dot.setLayoutY(sceneY);
+        cursorLayer.getChildren().add(dot);
+
+        FadeTransition fade = new FadeTransition(Duration.millis(550), dot);
+        fade.setFromValue(0.85);
+        fade.setToValue(0);
+
+        ScaleTransition shrink = new ScaleTransition(Duration.millis(550), dot);
+        shrink.setFromX(1);
+        shrink.setFromY(1);
+        shrink.setToX(0.2);
+        shrink.setToY(0.2);
+
+        ParallelTransition trail = new ParallelTransition(dot, fade, shrink);
+        trail.setOnFinished(e -> cursorLayer.getChildren().remove(dot));
+        trail.play();
+    }
+
+    /** Expands a soft ring outward from wherever the user clicks. */
+    private void spawnClickRipple(double sceneX, double sceneY) {
+        Circle ring = new Circle(6, Color.TRANSPARENT);
+        ring.setStroke(Color.web("#FFFFFF", 0.85));
+        ring.setStrokeWidth(2);
+        ring.setLayoutX(sceneX);
+        ring.setLayoutY(sceneY);
+        cursorLayer.getChildren().add(ring);
+
+        ScaleTransition grow = new ScaleTransition(Duration.millis(450), ring);
+        grow.setFromX(0.2);
+        grow.setFromY(0.2);
+        grow.setToX(4);
+        grow.setToY(4);
+        grow.setInterpolator(Interpolator.EASE_OUT);
+
+        FadeTransition fade = new FadeTransition(Duration.millis(450), ring);
+        fade.setFromValue(0.85);
+        fade.setToValue(0);
+
+        ParallelTransition ripple = new ParallelTransition(ring, grow, fade);
+        ripple.setOnFinished(e -> cursorLayer.getChildren().remove(ring));
+        ripple.play();
     }
 
     private Node buildDetailHeader() {
@@ -1065,6 +1142,30 @@ public class PortfolioApp extends Application {
             dialog.getDialogPane().getStylesheets().add(css.toExternalForm());
             dialog.getDialogPane().getStyleClass().add("app-dialog");
         }
+        animateDialogIn(dialog);
+    }
+
+    /** Fades and scales the dialog pane in the moment the dialog becomes visible. */
+    private void animateDialogIn(Dialog<?> dialog) {
+        DialogPane pane = dialog.getDialogPane();
+        pane.setOpacity(0);
+        pane.setScaleX(0.92);
+        pane.setScaleY(0.92);
+
+        dialog.setOnShown(e -> {
+            FadeTransition fade = new FadeTransition(Duration.millis(220), pane);
+            fade.setFromValue(0);
+            fade.setToValue(1);
+
+            ScaleTransition scale = new ScaleTransition(Duration.millis(220), pane);
+            scale.setFromX(0.92);
+            scale.setFromY(0.92);
+            scale.setToX(1);
+            scale.setToY(1);
+            scale.setInterpolator(Interpolator.EASE_OUT);
+
+            new ParallelTransition(pane, fade, scale).play();
+        });
     }
 
     public static void main(String[] args) {
