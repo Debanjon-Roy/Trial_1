@@ -47,30 +47,6 @@
     -fx-font-weight: bold;
 }
 
-/* --------------------------------------------------------------- nav bar */
-
-.nav-bar {
-    -fx-padding: 8 24 8 24;
-    -fx-background-color: rgba(88, 6, 0, 0.42);
-    -fx-border-color: transparent transparent rgba(255, 255, 255, 0.16) transparent;
-    -fx-border-width: 0 0 1 0;
-}
-
-.nav-button {
-    -fx-background-color: transparent;
-    -fx-text-fill: rgba(255, 255, 255, 0.85);
-    -fx-font-size: 12.5px;
-    -fx-font-weight: bold;
-    -fx-background-radius: 6;
-    -fx-padding: 6 14 6 14;
-    -fx-cursor: hand;
-}
-
-.nav-button:hover {
-    -fx-background-color: rgba(255, 255, 255, 0.18);
-    -fx-text-fill: white;
-}
-
 .owner-badge {
     -fx-text-fill: #7A0E00;
     -fx-background-color: #FFD54F;
@@ -250,20 +226,6 @@
     -fx-font-style: italic;
 }
 
-.card-clickable {
-    -fx-cursor: hand;
-}
-
-.card-clickable:hover {
-    -fx-background-color: rgba(255, 255, 255, 0.20);
-}
-
-.card-hint {
-    -fx-text-fill: rgba(255, 255, 255, 0.55);
-    -fx-font-size: 11px;
-    -fx-font-style: italic;
-}
-
 /* -------------------------------------------------------------- status pills */
 
 .pill {
@@ -339,8 +301,6 @@
 
 .app-dialog {
     -fx-background-color: #FFF6F4;
-    -fx-background-radius: 10;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.55), 32, 0.3, 0, 10);
 }
 
 .app-dialog .label {
@@ -374,4 +334,64 @@
 .app-dialog .combo-box,
 .app-dialog .text-area {
     -fx-background-radius: 6;
+}
+
+/* ------------------------------------------------------------------ nav bar */
+
+.nav-bar {
+    -fx-padding: 9 24 9 24;
+    -fx-background-color: rgba(120, 10, 0, 0.35);
+    -fx-border-color: transparent transparent rgba(255, 255, 255, 0.15) transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.nav-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: rgba(255, 255, 255, 0.88);
+    -fx-font-size: 12.5px;
+    -fx-font-weight: bold;
+    -fx-padding: 5 12 5 12;
+    -fx-background-radius: 6;
+    -fx-cursor: hand;
+}
+
+.nav-button:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.16);
+    -fx-text-fill: white;
+}
+
+/* -------------------------------------------------------------- clickable card body */
+
+.card-body-clickable {
+    -fx-cursor: hand;
+}
+
+.card-body-clickable:hover .card-title {
+    -fx-text-fill: #FFE082;
+    -fx-underline: true;
+}
+
+/* --------------------------------------------------------------- detail page */
+
+.detail-title {
+    -fx-text-fill: white;
+    -fx-font-size: 27px;
+    -fx-font-weight: bold;
+}
+
+.attachment-frame {
+    -fx-background-color: rgba(0, 0, 0, 0.25);
+    -fx-background-radius: 10;
+    -fx-padding: 10;
+}
+
+/* ------------------------------------------------------------ loading overlay */
+
+.loading-overlay {
+    -fx-background-color: rgba(60, 4, 0, 0.72);
+}
+
+.loading-label {
+    -fx-text-fill: white;
+    -fx-font-size: 14px;
 }

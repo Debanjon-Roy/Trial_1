@@ -14,10 +14,11 @@ import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
-import javafx.geometry.Bounds;
+import javafx.collections.ObservableList;
+import javafx.concurrent.Task;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.util.Duration;
+import javafx.scene.Cursor;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
@@ -25,10 +26,10 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Dialog;
-import javafx.scene.control.DialogPane;
 import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.PasswordField;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
@@ -50,9 +51,9 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.nio.file.Files;
@@ -60,134 +61,225 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 /**
  * Personal portfolio desktop app.
  *
- * Sections: About, Projects, Research, Achievements, Donate, Contact, Comments.
- * The "+" button is gated behind a password so only the owner can add entries.
+ * Sections: About, Projects, Research, Achievements, Donate, Contact, Comments,
+ * reachable both by scrolling and via the nav bar under the header. Clicking a
+ * project/research/achievement card opens a detail view with room for a full
+ * description, an attached image or PDF, and its own comment thread.
+ *
+ * Concurrency: every database read/write and every file copy runs on a
+ * background thread from Concurrency's fixed thread pool via runBackground(...)
+ * below, so the window never freezes while it talks to disk. See the comment
+ * on Concurrency.java for the full list of where this is used.
  */
 public class PortfolioApp extends Application {
 
     // ----------------------------------------------------- personal details
     // Edit these six lines and the app is yours.
-    private static final String MY_NAME = "Debanjon Roy";
+    private static final String MY_NAME = "Your Name";
     private static final String MY_TAGLINE = "Computer Science Undergraduate · Developer · Researcher";
     private static final String MY_ABOUT =
             "I build software and study problems that sit close to real life. "
-                    + "Most of my work is in C++, Dart and Python, with a growing interest in "
-                    + "applied machine learning and language data and developing desktop and mobile apps. I like projects "
+                    + "Most of my work is in Java and Python, with a growing interest in "
+                    + "applied machine learning for climate and language data. I like projects "
                     + "that ship, papers that answer a narrow question well, and code that the "
                     + "next person can read.";
 
-    private static final String GITHUB_URL = "https://github.com/Debanjon-Roy";
+    private static final String GITHUB_URL = "https://github.com/yourusername";
     private static final String LINKEDIN_URL = "https://www.linkedin.com/in/yourusername";
-    private static final String EMAIL = "roydebanjon2004@gmail.com";
-    private static final String WHATSAPP_NUMBER = "8801741816336"; // country code, no + and no spaces
+    private static final String EMAIL = "you@example.com";
+    private static final String WHATSAPP_NUMBER = "8801XXXXXXXXX"; // country code, no + and no spaces
 
     private static final Path ATTACHMENTS_DIR = Paths.get("data", "attachments");
 
     // ------------------------------------------------------------- state
     private final Store store = new Store();
     private final BkashService bkash = new BkashService();
+    private final ObservableList<Item> items = FXCollections.observableArrayList();
+    private final ObservableList<Comment> comments = FXCollections.observableArrayList();
     private final BooleanProperty ownerMode = new SimpleBooleanProperty(false);
     private final StringProperty searchQuery = new SimpleStringProperty("");
+    private final Map<String, Node> sectionAnchors = new LinkedHashMap<>();
+
+    private Stage stage;
+    private VBox mainContent;
+    private ScrollPane mainScroller;
+    private ScrollPane detailScroller;
+    private StackPane loadingOverlay;
+    private Pane cursorLayer;
 
     private VBox projectsBox;
     private VBox researchBox;
     private VBox achievementsBox;
     private VBox commentsBox;
-
-    private VBox content;
-    private ScrollPane scroller;
-
-    // Kept so a detail page can swap itself into the window and back out again.
-    private Stage stage;
-    private Scene scene;
-    private BorderPane mainRoot;
-
-    // The current page (main or a detail page) lives inside pageHost; cursorLayer sits on
-    // top of it always, so the cursor trail survives swapping between pages.
-    private StackPane pageHost;
-    private Pane cursorLayer;
-    private long lastTrailSpawn;
-
-    // Set while a detail page is open, so an edit made from that page can redraw it immediately.
     private Item currentDetailItem;
+    private long lastParticleTime = 0;
 
     @Override
     public void start(Stage stage) {
         this.stage = stage;
-        store.load();
 
         projectsBox = new VBox(14);
         researchBox = new VBox(14);
         achievementsBox = new VBox(14);
         commentsBox = new VBox(12);
 
-        VBox researchSection = buildItemSection("Research Work", researchBox, Item.Type.RESEARCH);
+        Node about = buildAbout();
+        Node projectsSection = buildItemSection("Projects", projectsBox);
+        VBox researchSection = buildItemSection("Research Work", researchBox);
         researchSection.getChildren().add(1, buildStatusLegend());
-
-        Node aboutSection = buildAbout();
-        Node projectsSection = buildItemSection("Projects", projectsBox, Item.Type.PROJECT);
-        Node achievementsSection = buildItemSection("Achievements", achievementsBox, Item.Type.ACHIEVEMENT);
+        Node achievementsSection = buildItemSection("Achievements", achievementsBox);
         Node donateSection = buildDonate();
         Node contactSection = buildContact();
-        Node commentsSection = buildComments();
+        Node commentsSection = buildCommentsSection("Comments", null, commentsBox);
 
-        content = new VBox(30);
-        content.getStyleClass().add("content");
-        content.getChildren().addAll(
-                aboutSection,
-                projectsSection,
-                researchSection,
-                achievementsSection,
-                donateSection,
-                contactSection,
-                commentsSection);
+        sectionAnchors.put("About", about);
+        sectionAnchors.put("Projects", projectsSection);
+        sectionAnchors.put("Research", researchSection);
+        sectionAnchors.put("Achievements", achievementsSection);
+        sectionAnchors.put("Donate", donateSection);
+        sectionAnchors.put("Contact", contactSection);
+        sectionAnchors.put("Comments", commentsSection);
 
-        scroller = new ScrollPane(content);
-        scroller.setFitToWidth(true);
-        scroller.getStyleClass().add("scroller");
+        mainContent = new VBox(30, about, projectsSection, researchSection, achievementsSection,
+                donateSection, contactSection, commentsSection);
+        mainContent.getStyleClass().add("content");
 
-        Node navBar = buildNavBar(
-                aboutSection, projectsSection, researchSection,
-                achievementsSection, donateSection, contactSection, commentsSection);
-        VBox topBar = new VBox(buildHeader(), navBar);
+        mainScroller = new ScrollPane(mainContent);
+        mainScroller.setFitToWidth(true);
+        mainScroller.getStyleClass().add("scroller");
 
-        mainRoot = new BorderPane();
-        mainRoot.getStyleClass().add("root-pane");
-        mainRoot.setTop(topBar);
-        mainRoot.setCenter(scroller);
+        detailScroller = new ScrollPane();
+        detailScroller.setFitToWidth(true);
+        detailScroller.getStyleClass().add("scroller");
+        detailScroller.setVisible(false);
+        detailScroller.setManaged(false);
 
-        searchQuery.addListener((obs, oldValue, newValue) -> refresh());
-        ownerMode.addListener((obs, oldValue, newValue) -> refresh());
-        refresh();
+        StackPane centerStack = new StackPane(mainScroller, detailScroller);
 
-        pageHost = new StackPane(mainRoot);
+        BorderPane root = new BorderPane();
+        root.getStyleClass().add("root-pane");
+        root.setTop(new VBox(buildHeader(), buildNavBar()));
+        root.setCenter(centerStack);
 
         cursorLayer = new Pane();
         cursorLayer.setMouseTransparent(true);
+        cursorLayer.setPickOnBounds(false);
 
-        StackPane sceneRoot = new StackPane(pageHost, cursorLayer);
+        loadingOverlay = buildLoadingOverlay();
 
-        scene = new Scene(sceneRoot, 1060, 780);
+        StackPane sceneRoot = new StackPane(root, cursorLayer, loadingOverlay);
+        cursorLayer.prefWidthProperty().bind(sceneRoot.widthProperty());
+        cursorLayer.prefHeightProperty().bind(sceneRoot.heightProperty());
+
+        searchQuery.addListener((obs, oldValue, newValue) -> refreshLists());
+        ownerMode.addListener((obs, oldValue, newValue) -> {
+            refreshLists();
+            if (currentDetailItem != null) {
+                openDetail(currentDetailItem);
+            }
+        });
+
+        Scene scene = new Scene(sceneRoot, 1060, 780);
+        scene.setOnMouseMoved(this::onCursorMoved);
         URL css = getClass().getResource("/style.css");
         if (css != null) {
             scene.getStylesheets().add(css.toExternalForm());
         }
-        scene.setOnMouseMoved(e -> spawnCursorGlow(e.getSceneX(), e.getSceneY()));
-        scene.setOnMouseClicked(e -> spawnClickRipple(e.getSceneX(), e.getSceneY()));
 
         stage.setTitle(MY_NAME + " — Portfolio");
         stage.setMinWidth(860);
         stage.setMinHeight(600);
         stage.setScene(scene);
         stage.show();
+
+        loadDataInBackground();
+    }
+
+    @Override
+    public void stop() {
+        Concurrency.shutdown();
+    }
+
+    // -------------------------------------------------------- data loading
+
+    private void loadDataInBackground() {
+        runBackground(store::load, result -> {
+            items.setAll(result.items);
+            comments.setAll(result.comments);
+            refreshLists();
+            hideLoadingOverlay();
+        });
+    }
+
+    private StackPane buildLoadingOverlay() {
+        ProgressIndicator spinner = new ProgressIndicator();
+        spinner.setMaxSize(52, 52);
+        Label label = new Label("Loading your portfolio…");
+        label.getStyleClass().add("loading-label");
+        VBox box = new VBox(14, spinner, label);
+        box.setAlignment(Pos.CENTER);
+        StackPane overlay = new StackPane(box);
+        overlay.getStyleClass().add("loading-overlay");
+        return overlay;
+    }
+
+    private void hideLoadingOverlay() {
+        loadingOverlay.setVisible(false);
+        loadingOverlay.setManaged(false);
+    }
+
+    // ------------------------------------------------------------- concurrency
+    //
+    // Wraps blocking work (SQL, file copies) in a javafx.concurrent.Task and
+    // hands it to Concurrency's thread pool instead of running it on the
+    // JavaFX Application Thread. Task guarantees onSucceeded/onFailed always
+    // fire back on the FX thread, which is why touching the UI and the
+    // ObservableLists inside onSuccess below is safe.
+
+    private <T> void runBackground(Callable<T> work, Consumer<T> onSuccess) {
+        Task<T> task = new Task<>() {
+            @Override
+            protected T call() throws Exception {
+                return work.call();
+            }
+        };
+        task.setOnSucceeded(e -> onSuccess.accept(task.getValue()));
+        task.setOnFailed(e -> {
+            Throwable ex = task.getException();
+            if (ex != null) {
+                ex.printStackTrace(); // full chain, including "Caused by:", visible in the Run console
+            }
+            info("Something went wrong", ex == null ? "Unknown error." : describeError(ex));
+        });
+        Concurrency.pool().submit(task);
+    }
+
+    /** Walks to the deepest cause so the dialog shows the real reason, not just a generic wrapper message. */
+    private String describeError(Throwable ex) {
+        Throwable cause = ex;
+        while (cause.getCause() != null && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        String top = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+        String root = cause.getMessage() == null ? cause.getClass().getSimpleName() : cause.getMessage();
+        return top.equals(root) ? top : top + "\n\nDetails: " + root;
+    }
+
+    private void runBackground(Runnable work, Runnable onSuccess) {
+        this.<Void>runBackground(() -> {
+            work.run();
+            return null;
+        }, ignored -> onSuccess.run());
     }
 
     // ------------------------------------------------------------- header
@@ -199,7 +291,7 @@ public class PortfolioApp extends Application {
         TextField search = new TextField();
         search.setPromptText("Search projects, research, achievements, comments…");
         search.getStyleClass().add("search-field");
-        search.setPrefWidth(360);
+        search.setPrefWidth(340);
         searchQuery.bind(search.textProperty());
 
         Button clear = new Button("✕");
@@ -211,16 +303,8 @@ public class PortfolioApp extends Application {
 
         Button add = new Button("+");
         add.getStyleClass().add("add-button");
-        add.setTooltip(new Tooltip("Add a project, research paper or achievement"));
+        add.setTooltip(new Tooltip("Add a project, research paper or achievement (owner only)"));
         add.setOnAction(e -> onAddClicked());
-        add.visibleProperty().bind(ownerMode);
-        add.managedProperty().bind(ownerMode);
-
-        Button changePassword = new Button("Change password");
-        changePassword.getStyleClass().add("ghost-button");
-        changePassword.visibleProperty().bind(ownerMode);
-        changePassword.managedProperty().bind(ownerMode);
-        changePassword.setOnAction(e -> showChangePasswordDialog());
 
         Button lock = new Button();
         lock.getStyleClass().add("ghost-button");
@@ -241,65 +325,48 @@ public class PortfolioApp extends Application {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        HBox header = new HBox(10, brand, badge, spacer, search, clear, add, changePassword, lock);
+        HBox header = new HBox(10, brand, badge, spacer, search, clear, add, lock);
         header.setAlignment(Pos.CENTER_LEFT);
         header.getStyleClass().add("header");
         return header;
     }
 
-    // ------------------------------------------------------------ nav bar
-
-    private Node buildNavBar(Node about, Node projects, Node research,
-                             Node achievements, Node donate, Node contact, Node comments) {
-        HBox nav = new HBox(4,
-                navButton("About", about),
-                navButton("Projects", projects),
-                navButton("Research", research),
-                navButton("Achievements", achievements),
-                navButton("Donate", donate),
-                navButton("Contact", contact),
-                navButton("Comments", comments));
-        nav.setAlignment(Pos.CENTER_LEFT);
-        nav.getStyleClass().add("nav-bar");
-        return nav;
+    private Node buildNavBar() {
+        HBox bar = new HBox(8);
+        bar.getStyleClass().add("nav-bar");
+        bar.setAlignment(Pos.CENTER_LEFT);
+        for (String label : List.of("About", "Projects", "Research", "Achievements",
+                "Donate", "Contact", "Comments")) {
+            Button button = new Button(label);
+            button.getStyleClass().add("nav-button");
+            button.setOnAction(e -> goToSection(label));
+            bar.getChildren().add(button);
+        }
+        return bar;
     }
 
-    private Button navButton(String label, Node target) {
-        Button button = new Button(label);
-        button.getStyleClass().add("nav-button");
-        button.setOnAction(e -> scrollTo(target));
-        return button;
-    }
-
-    /** Smoothly scrolls the page so the given section lands at the top of the viewport. */
-    private void scrollTo(Node target) {
-        if (target == null || scroller == null || content == null) {
+    private void goToSection(String key) {
+        showMainView();
+        Node target = sectionAnchors.get(key);
+        if (target == null) {
             return;
         }
-        // Force a layout pass first, since a recent search or owner-mode toggle
-        // may have changed how tall the content is since it was last measured.
-        content.applyCss();
-        content.layout();
-
-        Bounds targetBounds = content.sceneToLocal(target.localToScene(target.getBoundsInLocal()));
-        double scrollableHeight = content.getHeight() - scroller.getViewportBounds().getHeight();
-        double targetVvalue = scrollableHeight <= 0
-                ? 0
-                : clamp(targetBounds.getMinY() / scrollableHeight, 0, 1);
-
-        Timeline animation = new Timeline(new KeyFrame(Duration.millis(400),
-                new KeyValue(scroller.vvalueProperty(), targetVvalue, Interpolator.EASE_BOTH)));
-        animation.play();
-    }
-
-    private double clamp(double value, double min, double max) {
-        return Math.max(min, Math.min(max, value));
+        mainContent.applyCss();
+        mainContent.layout();
+        double targetY = Math.max(0, target.getBoundsInParent().getMinY() - 10);
+        double contentHeight = mainContent.getHeight();
+        double viewportHeight = mainScroller.getViewportBounds().getHeight();
+        double maxScroll = Math.max(1, contentHeight - viewportHeight);
+        double value = Math.max(0, Math.min(1, targetY / maxScroll));
+        Timeline timeline = new Timeline(new KeyFrame(Duration.millis(420),
+                new KeyValue(mainScroller.vvalueProperty(), value, Interpolator.EASE_BOTH)));
+        timeline.play();
     }
 
     // -------------------------------------------------------------- about
 
     private Node buildAbout() {
-        Node photo = circularPhoto("/images/profile.jpeg", 130);
+        Node photo = circularPhoto("/images/profile.png", 130);
 
         Label name = new Label(MY_NAME);
         name.getStyleClass().add("hero-name");
@@ -324,30 +391,10 @@ public class PortfolioApp extends Application {
 
     // ------------------------------------------------------ item sections
 
-    private VBox buildItemSection(String title, VBox listBox, Item.Type type) {
+    private VBox buildItemSection(String title, VBox listBox) {
         VBox section = new VBox(14);
         section.getStyleClass().add("section");
-
-        Label heading = sectionTitle(title);
-
-        Button addButton = new Button("+ Add");
-        addButton.getStyleClass().add("ghost-button");
-        addButton.visibleProperty().bind(ownerMode);
-        addButton.managedProperty().bind(ownerMode);
-        addButton.setOnAction(e -> {
-            if (!ownerMode.get() && !requestLogin()) {
-                return;
-            }
-            showItemDialog(null, type);
-        });
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        HBox headerRow = new HBox(10, heading, spacer, addButton);
-        headerRow.setAlignment(Pos.CENTER_LEFT);
-
-        section.getChildren().addAll(headerRow, listBox);
+        section.getChildren().addAll(sectionTitle(title), listBox);
         return section;
     }
 
@@ -378,6 +425,7 @@ public class PortfolioApp extends Application {
         return pill;
     }
 
+    /** Card shown in a list. Clicking the title/description area opens the detail page. */
     private Node itemCard(Item item) {
         Label title = new Label(item.getTitle());
         title.getStyleClass().add("card-title");
@@ -396,160 +444,76 @@ public class PortfolioApp extends Application {
         description.getStyleClass().add("card-text");
         description.setWrapText(true);
 
-        VBox card = new VBox(8, title);
+        VBox cardBody = new VBox(8, title);
         if (!meta.getChildren().isEmpty()) {
-            card.getChildren().add(meta);
+            cardBody.getChildren().add(meta);
         }
-        card.getChildren().add(description);
+        cardBody.getChildren().add(description);
+        cardBody.getStyleClass().add("card-body-clickable");
+        cardBody.setCursor(Cursor.HAND);
+        cardBody.setOnMouseClicked(e -> openDetail(item));
+
+        VBox card = new VBox(10, cardBody);
+        card.getStyleClass().add("card");
 
         if (!item.getLink().isBlank()) {
             Hyperlink link = new Hyperlink(item.getLink());
             link.getStyleClass().add("card-link");
             link.setOnAction(e -> openLink(item.getLink()));
-            link.addEventHandler(MouseEvent.MOUSE_CLICKED, javafx.event.Event::consume);
             card.getChildren().add(link);
         }
 
         if (ownerMode.get()) {
-            Button edit = new Button("Edit");
-            edit.getStyleClass().add("ghost-button");
-            edit.setOnAction(e -> showItemDialog(item, null));
-            edit.addEventHandler(MouseEvent.MOUSE_CLICKED, javafx.event.Event::consume);
-
             Button delete = new Button("Remove");
             delete.getStyleClass().add("danger-button");
             delete.setOnAction(e -> {
                 if (confirm("Remove \"" + item.getTitle() + "\"?")) {
-                    store.removeItem(item);
-                    refresh();
+                    delete.setDisable(true);
+                    runBackground(() -> store.deleteItem(item), () -> {
+                        items.remove(item);
+                        comments.removeIf(c -> c.getItemId() != null && c.getItemId() == item.getId());
+                        refreshLists();
+                    });
                 }
             });
-            delete.addEventHandler(MouseEvent.MOUSE_CLICKED, javafx.event.Event::consume);
-
-            HBox actions = new HBox(8, edit, delete);
+            HBox actions = new HBox(delete);
             actions.setAlignment(Pos.CENTER_RIGHT);
             card.getChildren().add(actions);
         }
 
-        Label hint = new Label("View details →");
-        hint.getStyleClass().add("card-hint");
-        card.getChildren().add(hint);
-
-        card.getStyleClass().addAll("card", "card-clickable");
-        card.setOnMouseClicked(e -> showItemDetail(item));
         return card;
     }
 
-    // -------------------------------------------------------- detail page
+    // ---------------------------------------------------------- detail view
 
-    /** Swaps the window's content for a full page about one item, with attachments and its own comments. */
-    private void showItemDetail(Item item) {
-        Node header = buildDetailHeader();
-        Node body = buildDetailBody(item);
-
-        ScrollPane detailScroller = new ScrollPane(body);
-        detailScroller.setFitToWidth(true);
-        detailScroller.getStyleClass().add("scroller");
-
-        BorderPane detailRoot = new BorderPane();
-        detailRoot.getStyleClass().add("root-pane");
-        detailRoot.setTop(header);
-        detailRoot.setCenter(detailScroller);
-
-        pageHost.getChildren().setAll(detailRoot);
+    private void openDetail(Item item) {
         currentDetailItem = item;
+        detailScroller.setContent(buildDetailContent(item));
+        showDetailView();
     }
 
-    /** Swaps the window's content back to the main page. */
-    private void showMain() {
-        pageHost.getChildren().setAll(mainRoot);
+    private void showDetailView() {
+        mainScroller.setVisible(false);
+        mainScroller.setManaged(false);
+        detailScroller.setVisible(true);
+        detailScroller.setManaged(true);
+    }
+
+    private void showMainView() {
         currentDetailItem = null;
-        refresh();
+        detailScroller.setVisible(false);
+        detailScroller.setManaged(false);
+        mainScroller.setVisible(true);
+        mainScroller.setManaged(true);
     }
 
-    /** Rebuilds the detail page in place if it's the one currently open, so an edit shows up right away. */
-    private void refreshDetailIfShowing(Item item) {
-        if (currentDetailItem == item) {
-            showItemDetail(item);
-        }
-    }
-
-    // ------------------------------------------------------- cursor effects
-
-    /** Drops a small glowing dot at the cursor that quickly fades and shrinks, leaving a trail. */
-    private void spawnCursorGlow(double sceneX, double sceneY) {
-        long now = System.currentTimeMillis();
-        if (now - lastTrailSpawn < 35) {
-            return;
-        }
-        lastTrailSpawn = now;
-
-        Circle dot = new Circle(4, Color.web("#FFD54F", 0.85));
-        dot.setEffect(new Glow(0.8));
-        dot.setLayoutX(sceneX);
-        dot.setLayoutY(sceneY);
-        cursorLayer.getChildren().add(dot);
-
-        FadeTransition fade = new FadeTransition(Duration.millis(550), dot);
-        fade.setFromValue(0.85);
-        fade.setToValue(0);
-
-        ScaleTransition shrink = new ScaleTransition(Duration.millis(550), dot);
-        shrink.setFromX(1);
-        shrink.setFromY(1);
-        shrink.setToX(0.2);
-        shrink.setToY(0.2);
-
-        ParallelTransition trail = new ParallelTransition(dot, fade, shrink);
-        trail.setOnFinished(e -> cursorLayer.getChildren().remove(dot));
-        trail.play();
-    }
-
-    /** Expands a soft ring outward from wherever the user clicks. */
-    private void spawnClickRipple(double sceneX, double sceneY) {
-        Circle ring = new Circle(6, Color.TRANSPARENT);
-        ring.setStroke(Color.web("#FFFFFF", 0.85));
-        ring.setStrokeWidth(2);
-        ring.setLayoutX(sceneX);
-        ring.setLayoutY(sceneY);
-        cursorLayer.getChildren().add(ring);
-
-        ScaleTransition grow = new ScaleTransition(Duration.millis(450), ring);
-        grow.setFromX(0.2);
-        grow.setFromY(0.2);
-        grow.setToX(4);
-        grow.setToY(4);
-        grow.setInterpolator(Interpolator.EASE_OUT);
-
-        FadeTransition fade = new FadeTransition(Duration.millis(450), ring);
-        fade.setFromValue(0.85);
-        fade.setToValue(0);
-
-        ParallelTransition ripple = new ParallelTransition(ring, grow, fade);
-        ripple.setOnFinished(e -> cursorLayer.getChildren().remove(ring));
-        ripple.play();
-    }
-
-    private Node buildDetailHeader() {
-        Button back = new Button("← Back");
+    private VBox buildDetailContent(Item item) {
+        Button back = new Button("← Back to portfolio");
         back.getStyleClass().add("ghost-button");
-        back.setOnAction(e -> showMain());
+        back.setOnAction(e -> showMainView());
 
-        Label brand = new Label(MY_NAME);
-        brand.getStyleClass().add("brand");
-
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        HBox header = new HBox(14, back, spacer, brand);
-        header.setAlignment(Pos.CENTER_LEFT);
-        header.getStyleClass().add("header");
-        return header;
-    }
-
-    private Node buildDetailBody(Item item) {
         Label title = new Label(item.getTitle());
-        title.getStyleClass().add("hero-name");
+        title.getStyleClass().add("detail-title");
         title.setWrapText(true);
 
         HBox meta = new HBox(8);
@@ -562,162 +526,97 @@ public class PortfolioApp extends Application {
             meta.getChildren().add(statusPill(item.getStatus()));
         }
 
-        Label description = new Label(item.getDescription());
-        description.getStyleClass().add("hero-about");
+        Label description = new Label(item.getDescription().isBlank()
+                ? "No description yet." : item.getDescription());
+        description.getStyleClass().add("card-text");
         description.setWrapText(true);
+        description.setMaxWidth(680);
 
-        Button editButton = new Button("Edit");
-        editButton.getStyleClass().add("ghost-button");
-        editButton.visibleProperty().bind(ownerMode);
-        editButton.managedProperty().bind(ownerMode);
-        editButton.setOnAction(e -> showItemDialog(item, null));
+        VBox detailCard = new VBox(14, title, meta, description);
+        detailCard.getStyleClass().add("section");
 
-        Region titleSpacer = new Region();
-        HBox.setHgrow(titleSpacer, Priority.ALWAYS);
-        HBox titleRow = new HBox(10, title, titleSpacer, editButton);
-        titleRow.setAlignment(Pos.CENTER_LEFT);
+        if (!item.getAttachmentPath().isBlank()) {
+            Path file = ATTACHMENTS_DIR.resolve(item.getAttachmentPath());
+            if (Files.exists(file)) {
+                if (isImageFile(item.getAttachmentPath())) {
+                    ImageView iv = new ImageView(new Image(file.toUri().toString()));
+                    iv.setPreserveRatio(true);
+                    iv.setFitWidth(480);
+                    StackPane frame = new StackPane(iv);
+                    frame.getStyleClass().add("attachment-frame");
+                    detailCard.getChildren().add(frame);
+                } else {
+                    Button openFile = new Button("Open attached file (" + item.getAttachmentPath() + ")");
+                    openFile.getStyleClass().add("ghost-button");
+                    openFile.setOnAction(e -> openLink(file.toUri().toString()));
+                    detailCard.getChildren().add(openFile);
+                }
+            }
+        }
 
-        VBox infoBox = new VBox(12, titleRow, meta, description);
         if (!item.getLink().isBlank()) {
             Hyperlink link = new Hyperlink(item.getLink());
             link.getStyleClass().add("card-link");
             link.setOnAction(e -> openLink(item.getLink()));
-            infoBox.getChildren().add(link);
+            detailCard.getChildren().add(link);
         }
-        VBox infoSection = new VBox(infoBox);
-        infoSection.getStyleClass().addAll("section", "hero");
-
-        VBox attachmentsSection = new VBox(16,
-                sectionTitle("Attachments"),
-                new Label("Photo"),
-                buildDetailPhoto(item),
-                new Label("PDF"),
-                buildDetailPdf(item));
-        attachmentsSection.getStyleClass().add("section");
-
-        VBox body = new VBox(24, infoSection, attachmentsSection, buildItemCommentsSection(item));
-        body.getStyleClass().add("content");
-        return body;
-    }
-
-    private Node buildDetailPhoto(Item item) {
-        File file = resolveAttachment(item.getImagePath());
-        if (file != null && file.isFile()) {
-            ImageView view = new ImageView(new Image(file.toURI().toString()));
-            view.setFitWidth(360);
-            view.setPreserveRatio(true);
-            view.setSmooth(true);
-            StackPane frame = new StackPane(view);
-            frame.getStyleClass().add("photo-frame");
-            return frame;
-        }
-        Label empty = new Label("Empty");
-        empty.getStyleClass().add("empty-label");
-        return empty;
-    }
-
-    private Node buildDetailPdf(Item item) {
-        File file = resolveAttachment(item.getPdfPath());
-        if (file != null && file.isFile()) {
-            Button open = new Button("Open attached PDF");
-            open.getStyleClass().add("primary-button");
-            open.setOnAction(e -> openLink(file.toURI().toString()));
-            return open;
-        }
-        Label empty = new Label("Empty");
-        empty.getStyleClass().add("empty-label");
-        return empty;
-    }
-
-    /** Null/blank path means nothing was attached; otherwise resolves it relative to the app's working directory. */
-    private File resolveAttachment(String storedPath) {
-        if (storedPath == null || storedPath.isBlank()) {
-            return null;
-        }
-        return new File(storedPath);
-    }
-
-    // ------------------------------------------------------ item comments
-
-    private Node buildItemCommentsSection(Item item) {
-        VBox listBox = new VBox(12);
-        refreshItemComments(item, listBox);
-
-        TextField author = new TextField();
-        author.setPromptText("Your name");
-        author.setPrefWidth(200);
-        author.getStyleClass().add("input");
-
-        TextArea body = new TextArea();
-        body.setPromptText("Leave a comment on this " + item.getType().label().toLowerCase() + "…");
-        body.setPrefRowCount(3);
-        body.setWrapText(true);
-        body.getStyleClass().add("input");
-
-        Button post = new Button("Post comment");
-        post.getStyleClass().add("primary-button");
-        post.setOnAction(e -> {
-            if (body.getText().isBlank()) {
-                info("Empty comment", "Please write something before posting.");
-                return;
-            }
-            if (item.getId() == null) {
-                info("Not saved yet", "This item hasn't finished saving. Please try again in a moment.");
-                return;
-            }
-            store.addComment(new Comment(author.getText(), body.getText(), LocalDateTime.now(), item.getId()));
-            author.clear();
-            body.clear();
-            refreshItemComments(item, listBox);
-        });
-
-        HBox actions = new HBox(10, author, post);
-        actions.setAlignment(Pos.CENTER_LEFT);
-
-        VBox section = new VBox(14, sectionTitle("Comments"), body, actions, listBox);
-        section.getStyleClass().add("section");
-        return section;
-    }
-
-    private void refreshItemComments(Item item, VBox listBox) {
-        listBox.getChildren().clear();
-        List<Comment> matching = store.comments().stream()
-                .filter(c -> item.getId() != null && item.getId().equals(c.getItemId()))
-                .collect(Collectors.toList());
-        if (matching.isEmpty()) {
-            listBox.getChildren().add(emptyLabel(null, "comments"));
-            return;
-        }
-        for (Comment comment : matching) {
-            listBox.getChildren().add(itemCommentCard(item, comment, listBox));
-        }
-    }
-
-    private Node itemCommentCard(Item item, Comment comment, VBox listBox) {
-        Label header = new Label(comment.getAuthor() + "  ·  " + comment.getPostedAtDisplay());
-        header.getStyleClass().add("comment-header");
-
-        Label text = new Label(comment.getText());
-        text.getStyleClass().add("card-text");
-        text.setWrapText(true);
-
-        VBox card = new VBox(6, header, text);
-        card.getStyleClass().addAll("card", "comment-card");
 
         if (ownerMode.get()) {
-            Button delete = new Button("Delete");
-            delete.getStyleClass().add("danger-button");
-            delete.setOnAction(e -> {
-                if (confirm("Delete this comment?")) {
-                    store.removeComment(comment);
-                    refreshItemComments(item, listBox);
-                }
-            });
-            HBox row = new HBox(delete);
-            row.setAlignment(Pos.CENTER_RIGHT);
-            card.getChildren().add(row);
+            Button attach = new Button(item.getAttachmentPath().isBlank()
+                    ? "Attach a file (image or PDF)" : "Replace attached file");
+            attach.getStyleClass().add("ghost-button");
+            attach.setOnAction(e -> chooseAndAttach(item));
+            detailCard.getChildren().add(attach);
         }
-        return card;
+
+        VBox itemCommentsBox = new VBox(12);
+        Node commentsSection = buildCommentsSection(
+                "Comments on this " + item.getType().label().toLowerCase(), item.getId(), itemCommentsBox);
+        fillItemComments(item.getId(), itemCommentsBox);
+
+        VBox page = new VBox(20, back, detailCard, commentsSection);
+        page.getStyleClass().add("content");
+        return page;
+    }
+
+    private boolean isImageFile(String filename) {
+        String lower = filename.toLowerCase();
+        return lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg")
+                || lower.endsWith(".gif") || lower.endsWith(".bmp");
+    }
+
+    /** Runs the file copy and the database update off the FX thread; see runBackground(...). */
+    private void chooseAndAttach(Item item) {
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Choose an image or PDF");
+        chooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Images and PDF", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.pdf"),
+                new FileChooser.ExtensionFilter("All files", "*.*"));
+        File chosen = chooser.showOpenDialog(stage);
+        if (chosen == null) {
+            return;
+        }
+        runBackground(() -> {
+            String stored = storeAttachmentBlocking(chosen);
+            item.setAttachmentPath(stored);
+            store.updateItem(item);
+        }, () -> openDetail(item));
+    }
+
+    /**
+     * Copies the chosen file into data/attachments. Meant to be called only from
+     * inside a background task (see runBackground) since it does blocking I/O.
+     */
+    private String storeAttachmentBlocking(File source) {
+        try {
+            Files.createDirectories(ATTACHMENTS_DIR);
+            String safeName = System.currentTimeMillis() + "_"
+                    + source.getName().replaceAll("[^a-zA-Z0-9._-]", "_");
+            Files.copy(source.toPath(), ATTACHMENTS_DIR.resolve(safeName), StandardCopyOption.REPLACE_EXISTING);
+            return safeName;
+        } catch (Exception e) {
+            throw new RuntimeException("Could not copy the attachment: " + e.getMessage(), e);
+        }
     }
 
     // ------------------------------------------------------------- donate
@@ -814,13 +713,17 @@ public class PortfolioApp extends Application {
         row.setAlignment(Pos.CENTER_LEFT);
         row.getStyleClass().add("contact-row");
         row.setOnMouseClicked(e -> openLink(url));
-        row.setCursor(javafx.scene.Cursor.HAND);
+        row.setCursor(Cursor.HAND);
         return row;
     }
 
     // ----------------------------------------------------------- comments
 
-    private Node buildComments() {
+    /**
+     * Builds a comments block. itemId == null means the general, site-wide
+     * comments section; any other value scopes it to that item's detail page.
+     */
+    private Node buildCommentsSection(String title, Integer itemId, VBox listBox) {
         TextField author = new TextField();
         author.setPromptText("Your name");
         author.setPrefWidth(200);
@@ -839,25 +742,30 @@ public class PortfolioApp extends Application {
                 info("Empty comment", "Please write something before posting.");
                 return;
             }
-            store.addComment(new Comment(author.getText(), body.getText(), LocalDateTime.now()));
-            author.clear();
-            body.clear();
-            refresh();
+            Comment comment = new Comment(author.getText(), body.getText(), LocalDateTime.now(), itemId);
+            post.setDisable(true);
+            runBackground(() -> store.insertComment(comment), () -> {
+                post.setDisable(false);
+                comments.add(0, comment);
+                author.clear();
+                body.clear();
+                if (itemId == null) {
+                    fillGeneralComments();
+                } else {
+                    fillItemComments(itemId, listBox);
+                }
+            });
         });
 
         HBox actions = new HBox(10, author, post);
         actions.setAlignment(Pos.CENTER_LEFT);
 
-        VBox section = new VBox(14,
-                sectionTitle("Comments"),
-                body,
-                actions,
-                commentsBox);
+        VBox section = new VBox(14, sectionTitle(title), body, actions, listBox);
         section.getStyleClass().add("section");
         return section;
     }
 
-    private Node commentCard(Comment comment) {
+    private Node commentCard(Comment comment, Runnable afterDelete) {
         Label header = new Label(comment.getAuthor() + "  ·  " + comment.getPostedAtDisplay());
         header.getStyleClass().add("comment-header");
 
@@ -873,8 +781,11 @@ public class PortfolioApp extends Application {
             delete.getStyleClass().add("danger-button");
             delete.setOnAction(e -> {
                 if (confirm("Delete this comment?")) {
-                    store.removeComment(comment);
-                    refresh();
+                    delete.setDisable(true);
+                    runBackground(() -> store.deleteComment(comment), () -> {
+                        comments.remove(comment);
+                        afterDelete.run();
+                    });
                 }
             });
             HBox row = new HBox(delete);
@@ -886,17 +797,17 @@ public class PortfolioApp extends Application {
 
     // ------------------------------------------------------------ refresh
 
-    private void refresh() {
+    private void refreshLists() {
         fillItems(projectsBox, Item.Type.PROJECT);
         fillItems(researchBox, Item.Type.RESEARCH);
         fillItems(achievementsBox, Item.Type.ACHIEVEMENT);
-        fillComments();
+        fillGeneralComments();
     }
 
     private void fillItems(VBox box, Item.Type type) {
         box.getChildren().clear();
         String query = searchQuery.get();
-        List<Item> matching = store.items().stream()
+        List<Item> matching = items.stream()
                 .filter(item -> item.getType() == type && item.matches(query))
                 .collect(Collectors.toList());
 
@@ -909,20 +820,34 @@ public class PortfolioApp extends Application {
         }
     }
 
-    private void fillComments() {
+    private void fillGeneralComments() {
         commentsBox.getChildren().clear();
         String query = searchQuery.get();
-        List<Comment> matching = store.comments().stream()
-                .filter(comment -> comment.getItemId() == null)
-                .filter(comment -> comment.matches(query))
+        List<Comment> matching = comments.stream()
+                .filter(c -> c.getItemId() == null && c.matches(query))
                 .collect(Collectors.toList());
 
         if (matching.isEmpty()) {
             commentsBox.getChildren().add(emptyLabel(query, "comments"));
             return;
         }
-        for (Comment comment : matching) {
-            commentsBox.getChildren().add(commentCard(comment));
+        for (Comment c : matching) {
+            commentsBox.getChildren().add(commentCard(c, this::fillGeneralComments));
+        }
+    }
+
+    private void fillItemComments(int itemId, VBox box) {
+        box.getChildren().clear();
+        List<Comment> matching = comments.stream()
+                .filter(c -> c.getItemId() != null && c.getItemId() == itemId)
+                .collect(Collectors.toList());
+
+        if (matching.isEmpty()) {
+            box.getChildren().add(emptyLabel(null, "comments"));
+            return;
+        }
+        for (Comment c : matching) {
+            box.getChildren().add(commentCard(c, () -> fillItemComments(itemId, box)));
         }
     }
 
@@ -941,7 +866,7 @@ public class PortfolioApp extends Application {
         if (!ownerMode.get() && !requestLogin()) {
             return;
         }
-        showItemDialog(null, null);
+        showAddDialog();
     }
 
     private boolean requestLogin() {
@@ -959,7 +884,7 @@ public class PortfolioApp extends Application {
         dialog.setResultConverter(button -> button == ButtonType.OK ? password.getText() : null);
         applyStylesheet(dialog);
 
-        Optional<String> result = dialog.showAndWait();
+        java.util.Optional<String> result = dialog.showAndWait();
         if (result.isEmpty() || result.get() == null) {
             return false;
         }
@@ -971,80 +896,22 @@ public class PortfolioApp extends Application {
         return false;
     }
 
-    private void showChangePasswordDialog() {
-        PasswordField current = new PasswordField();
-        current.setPromptText("Current password");
-
-        PasswordField newPassword = new PasswordField();
-        newPassword.setPromptText("New password");
-
-        PasswordField confirm = new PasswordField();
-        confirm.setPromptText("Confirm new password");
-
-        VBox content = new VBox(8,
-                new Label("Current password"), current,
-                new Label("New password"), newPassword,
-                new Label("Confirm new password"), confirm);
-        content.setPadding(new Insets(6, 0, 0, 0));
-
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Change password");
-        dialog.setHeaderText("Set a new owner password");
-        dialog.getDialogPane().setContent(content);
-        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-        dialog.setResultConverter(button -> button);
-        applyStylesheet(dialog);
-
-        Optional<ButtonType> result = dialog.showAndWait();
-        if (result.isEmpty() || result.get() != ButtonType.OK) {
-            return;
-        }
-
-        if (!Auth.verify(current.getText())) {
-            info("Incorrect password", "Your current password is incorrect. Nothing was changed.");
-            return;
-        }
-        if (newPassword.getText() == null || newPassword.getText().isBlank()) {
-            info("Password required", "Please enter a new password. Nothing was changed.");
-            return;
-        }
-        if (!newPassword.getText().equals(confirm.getText())) {
-            info("Passwords don't match", "The new password and its confirmation must match. Nothing was changed.");
-            return;
-        }
-
-        if (Auth.changePassword(newPassword.getText())) {
-            info("Password changed", "Your owner password has been updated.");
-        } else {
-            info("Could not save", "The new password could not be saved. "
-                    + "Check that the app can write to the data folder.");
-        }
-    }
-
-    /**
-     * Shared Add/Edit dialog. existing == null adds a new entry; otherwise the form is pre-filled
-     * from it and OK updates it in place instead of creating a new one. presetType only applies
-     * when existing is null (e.g. opened from a specific section's "+ Add"); it's ignored otherwise
-     * since an existing item's own type is used instead.
-     */
-    private void showItemDialog(Item existing, Item.Type presetType) {
-        boolean editing = existing != null;
-
+    private void showAddDialog() {
         ComboBox<Item.Type> type = new ComboBox<>(FXCollections.observableArrayList(Item.Type.values()));
-        type.setValue(editing ? existing.getType() : (presetType != null ? presetType : Item.Type.PROJECT));
+        type.setValue(Item.Type.PROJECT);
         type.setMaxWidth(Double.MAX_VALUE);
 
-        TextField title = new TextField(editing ? existing.getTitle() : "");
+        TextField title = new TextField();
         title.setPromptText("Title");
 
-        TextArea description = new TextArea(editing ? existing.getDescription() : "");
+        TextArea description = new TextArea();
         description.setPromptText("Short description");
         description.setPrefRowCount(4);
         description.setWrapText(true);
 
         ComboBox<Item.Status> status =
                 new ComboBox<>(FXCollections.observableArrayList(Item.Status.values()));
-        status.setValue(editing && existing.getStatus() != null ? existing.getStatus() : Item.Status.NOT_STARTED);
+        status.setValue(Item.Status.NOT_STARTED);
         status.setMaxWidth(Double.MAX_VALUE);
 
         Label statusLabel = new Label("Status");
@@ -1053,25 +920,30 @@ public class PortfolioApp extends Application {
         statusLabel.visibleProperty().bind(status.visibleProperty());
         statusLabel.managedProperty().bind(status.visibleProperty());
 
-        TextField link = new TextField(editing ? existing.getLink() : "");
+        TextField link = new TextField();
         link.setPromptText("https://… (optional)");
 
-        TextField year = new TextField(editing ? existing.getYear() : "");
+        TextField year = new TextField();
         year.setPromptText("2026 (optional)");
 
-        HBox photoRow = buildAttachmentRow(
-                editing ? existing.getImagePath() : "",
-                "Choose photo…",
-                new FileChooser.ExtensionFilter("Images", "*.png", "*.jpg", "*.jpeg", "*.gif"));
-        File[] chosenPhoto = (File[]) photoRow.getProperties().get("chosen");
-        boolean[] removePhoto = (boolean[]) photoRow.getProperties().get("remove");
-
-        HBox pdfRow = buildAttachmentRow(
-                editing ? existing.getPdfPath() : "",
-                "Choose PDF…",
-                new FileChooser.ExtensionFilter("PDF files", "*.pdf"));
-        File[] chosenPdf = (File[]) pdfRow.getProperties().get("chosen");
-        boolean[] removePdf = (boolean[]) pdfRow.getProperties().get("remove");
+        Button chooseFile = new Button("Choose file (optional)");
+        Label chosenFileLabel = new Label("No file chosen");
+        chosenFileLabel.getStyleClass().add("card-text");
+        File[] chosenFile = new File[1];
+        chooseFile.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle("Choose an image or PDF (optional)");
+            chooser.getExtensionFilters().addAll(
+                    new FileChooser.ExtensionFilter("Images and PDF", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.pdf"),
+                    new FileChooser.ExtensionFilter("All files", "*.*"));
+            File chosen = chooser.showOpenDialog(stage);
+            if (chosen != null) {
+                chosenFile[0] = chosen;
+                chosenFileLabel.setText(chosen.getName());
+            }
+        });
+        HBox fileRow = new HBox(10, chooseFile, chosenFileLabel);
+        fileRow.setAlignment(Pos.CENTER_LEFT);
 
         GridPane form = new GridPane();
         form.setHgap(12);
@@ -1083,20 +955,17 @@ public class PortfolioApp extends Application {
         form.addRow(3, statusLabel, status);
         form.addRow(4, new Label("Link"), link);
         form.addRow(5, new Label("Year"), year);
-        form.addRow(6, new Label("Photo"), photoRow);
-        form.addRow(7, new Label("PDF"), pdfRow);
+        form.addRow(6, new Label("Attachment"), fileRow);
 
         Dialog<Item> dialog = new Dialog<>();
-        dialog.setTitle(editing ? "Edit entry" : "Add entry");
-        dialog.setHeaderText(editing
-                ? "Editing \"" + existing.getTitle() + "\""
-                : "New project, research paper or achievement");
+        dialog.setTitle("Add entry");
+        dialog.setHeaderText("New project, research paper or achievement");
         dialog.getDialogPane().setContent(form);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
         applyStylesheet(dialog);
 
         Node okButton = dialog.getDialogPane().lookupButton(ButtonType.OK);
-        okButton.setDisable(title.getText().isBlank());
+        okButton.setDisable(true);
         title.textProperty().addListener((obs, oldValue, newValue) ->
                 okButton.setDisable(newValue == null || newValue.isBlank()));
 
@@ -1104,117 +973,23 @@ public class PortfolioApp extends Application {
             if (button != ButtonType.OK) {
                 return null;
             }
-            Item.Status chosenStatus = type.getValue() == Item.Type.RESEARCH ? status.getValue() : null;
-            String imagePath = resolveAttachmentPath(
-                    chosenPhoto[0], removePhoto[0], editing ? existing.getImagePath() : "", "images");
-            String pdfPath = resolveAttachmentPath(
-                    chosenPdf[0], removePdf[0], editing ? existing.getPdfPath() : "", "pdfs");
-
-            if (editing) {
-                existing.setType(type.getValue());
-                existing.setTitle(title.getText().trim());
-                existing.setDescription(description.getText().trim());
-                existing.setStatus(chosenStatus);
-                existing.setLink(link.getText().trim());
-                existing.setYear(year.getText().trim());
-                existing.setImagePath(imagePath);
-                existing.setPdfPath(pdfPath);
-                return existing;
-            }
+            Item.Status chosen = type.getValue() == Item.Type.RESEARCH ? status.getValue() : null;
             return new Item(type.getValue(), title.getText().trim(), description.getText().trim(),
-                    chosenStatus, link.getText().trim(), year.getText().trim(), imagePath, pdfPath);
+                    chosen, link.getText().trim(), year.getText().trim());
         });
 
         dialog.showAndWait().ifPresent(item -> {
-            if (editing) {
-                store.updateItem(item);
-            } else {
-                store.addItem(item);
-            }
-            refresh();
-            refreshDetailIfShowing(item);
+            File attachment = chosenFile[0];
+            runBackground(() -> {
+                if (attachment != null) {
+                    item.setAttachmentPath(storeAttachmentBlocking(attachment));
+                }
+                store.insertItem(item);
+            }, () -> {
+                items.add(item);
+                refreshLists();
+            });
         });
-    }
-
-    /**
-     * Builds a "Choose file… [Remove] current-or-chosen-name" row for the Add/Edit dialog. The
-     * File[1] and boolean[1] arrays tracking the user's choice are stashed on the row's own
-     * properties map (under "chosen"/"remove") so the caller can read them back after the dialog
-     * closes, without needing three near-identical private fields per attachment type.
-     */
-    private HBox buildAttachmentRow(String existingPath, String chooseLabel, FileChooser.ExtensionFilter filter) {
-        boolean hasExisting = existingPath != null && !existingPath.isBlank();
-
-        File[] chosen = new File[1];
-        boolean[] remove = new boolean[1];
-
-        Label label = new Label(hasExisting ? "Current: " + new File(existingPath).getName() : "None attached");
-        label.getStyleClass().add("card-text");
-
-        Button chooseButton = new Button(chooseLabel);
-        chooseButton.getStyleClass().add("ghost-button");
-
-        Button removeButton = new Button("Remove");
-        removeButton.getStyleClass().add("danger-button");
-        removeButton.setVisible(hasExisting);
-        removeButton.setManaged(hasExisting);
-
-        chooseButton.setOnAction(e -> {
-            FileChooser chooser = new FileChooser();
-            chooser.setTitle(chooseLabel.replace("…", ""));
-            chooser.getExtensionFilters().add(filter);
-            File selected = chooser.showOpenDialog(stage);
-            if (selected != null) {
-                chosen[0] = selected;
-                remove[0] = false;
-                label.setText(selected.getName());
-                removeButton.setVisible(true);
-                removeButton.setManaged(true);
-            }
-        });
-
-        removeButton.setOnAction(e -> {
-            chosen[0] = null;
-            remove[0] = true;
-            label.setText("None attached");
-            removeButton.setVisible(false);
-            removeButton.setManaged(false);
-        });
-
-        HBox row = new HBox(10, chooseButton, removeButton, label);
-        row.setAlignment(Pos.CENTER_LEFT);
-        row.getProperties().put("chosen", chosen);
-        row.getProperties().put("remove", remove);
-        return row;
-    }
-
-    /** Newly chosen file wins; otherwise "removed" clears it; otherwise the existing path is kept as-is. */
-    private String resolveAttachmentPath(File chosen, boolean removed, String existingPath, String subfolder) {
-        if (chosen != null) {
-            return copyAttachment(chosen, subfolder);
-        }
-        if (removed) {
-            return "";
-        }
-        return existingPath == null ? "" : existingPath;
-    }
-
-    /**
-     * Copies a chosen file into ./data/attachments/{subfolder} under a unique name, so the entry
-     * still works even if the original file is later moved or deleted. Returns "" on failure.
-     */
-    private String copyAttachment(File source, String subfolder) {
-        try {
-            Path targetDir = ATTACHMENTS_DIR.resolve(subfolder);
-            Files.createDirectories(targetDir);
-            String safeName = UUID.randomUUID() + "-" + source.getName();
-            Path target = targetDir.resolve(safeName);
-            Files.copy(source.toPath(), target, StandardCopyOption.REPLACE_EXISTING);
-            return target.toString();
-        } catch (IOException e) {
-            info("Could not attach file", "Could not copy \"" + source.getName() + "\": " + e.getMessage());
-            return "";
-        }
     }
 
     // ------------------------------------------------------------- helpers
@@ -1318,30 +1093,41 @@ public class PortfolioApp extends Application {
             dialog.getDialogPane().getStylesheets().add(css.toExternalForm());
             dialog.getDialogPane().getStyleClass().add("app-dialog");
         }
-        animateDialogIn(dialog);
     }
 
-    /** Fades and scales the dialog pane in the moment the dialog becomes visible. */
-    private void animateDialogIn(Dialog<?> dialog) {
-        DialogPane pane = dialog.getDialogPane();
-        pane.setOpacity(0);
-        pane.setScaleX(0.92);
-        pane.setScaleY(0.92);
+    // -------------------------------------------------------- cursor effect
 
-        dialog.setOnShown(e -> {
-            FadeTransition fade = new FadeTransition(Duration.millis(220), pane);
-            fade.setFromValue(0);
-            fade.setToValue(1);
+    private void onCursorMoved(MouseEvent e) {
+        long now = System.currentTimeMillis();
+        if (now - lastParticleTime < 28) {
+            return;
+        }
+        lastParticleTime = now;
+        spawnParticle(e.getSceneX(), e.getSceneY());
+    }
 
-            ScaleTransition scale = new ScaleTransition(Duration.millis(220), pane);
-            scale.setFromX(0.92);
-            scale.setFromY(0.92);
-            scale.setToX(1);
-            scale.setToY(1);
-            scale.setInterpolator(Interpolator.EASE_OUT);
+    private void spawnParticle(double x, double y) {
+        boolean gold = Math.random() < 0.4;
+        Circle dot = new Circle(x, y, 4, gold ? Color.web("#FFD54F") : Color.web("#FFFFFF"));
+        dot.setOpacity(0.85);
+        dot.setMouseTransparent(true);
+        dot.setEffect(new Glow(0.6));
+        cursorLayer.getChildren().add(dot);
 
-            new ParallelTransition(pane, fade, scale).play();
-        });
+        ScaleTransition scale = new ScaleTransition(Duration.millis(650), dot);
+        scale.setToX(2.2);
+        scale.setToY(2.2);
+
+        FadeTransition fade = new FadeTransition(Duration.millis(650), dot);
+        fade.setToValue(0);
+
+        ParallelTransition transition = new ParallelTransition(dot, scale, fade);
+        transition.setOnFinished(ev -> cursorLayer.getChildren().remove(dot));
+        transition.play();
+
+        if (cursorLayer.getChildren().size() > 60) {
+            cursorLayer.getChildren().remove(0);
+        }
     }
 
     public static void main(String[] args) {
