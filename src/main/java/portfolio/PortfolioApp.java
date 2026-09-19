@@ -116,6 +116,9 @@ public class PortfolioApp extends Application {
     private Pane cursorLayer;
     private long lastTrailSpawn;
 
+    // Set while a detail page is open, so an edit made from that page can redraw it immediately.
+    private Item currentDetailItem;
+
     @Override
     public void start(Stage stage) {
         this.stage = stage;
@@ -213,6 +216,12 @@ public class PortfolioApp extends Application {
         add.visibleProperty().bind(ownerMode);
         add.managedProperty().bind(ownerMode);
 
+        Button changePassword = new Button("Change password");
+        changePassword.getStyleClass().add("ghost-button");
+        changePassword.visibleProperty().bind(ownerMode);
+        changePassword.managedProperty().bind(ownerMode);
+        changePassword.setOnAction(e -> showChangePasswordDialog());
+
         Button lock = new Button();
         lock.getStyleClass().add("ghost-button");
         lock.textProperty().bind(Bindings.when(ownerMode).then("Log out").otherwise("Owner login"));
@@ -232,7 +241,7 @@ public class PortfolioApp extends Application {
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        HBox header = new HBox(10, brand, badge, spacer, search, clear, add, lock);
+        HBox header = new HBox(10, brand, badge, spacer, search, clear, add, changePassword, lock);
         header.setAlignment(Pos.CENTER_LEFT);
         header.getStyleClass().add("header");
         return header;
@@ -329,7 +338,7 @@ public class PortfolioApp extends Application {
             if (!ownerMode.get() && !requestLogin()) {
                 return;
             }
-            showAddDialog(type);
+            showItemDialog(null, type);
         });
 
         Region spacer = new Region();
@@ -402,6 +411,11 @@ public class PortfolioApp extends Application {
         }
 
         if (ownerMode.get()) {
+            Button edit = new Button("Edit");
+            edit.getStyleClass().add("ghost-button");
+            edit.setOnAction(e -> showItemDialog(item, null));
+            edit.addEventHandler(MouseEvent.MOUSE_CLICKED, javafx.event.Event::consume);
+
             Button delete = new Button("Remove");
             delete.getStyleClass().add("danger-button");
             delete.setOnAction(e -> {
@@ -411,7 +425,8 @@ public class PortfolioApp extends Application {
                 }
             });
             delete.addEventHandler(MouseEvent.MOUSE_CLICKED, javafx.event.Event::consume);
-            HBox actions = new HBox(delete);
+
+            HBox actions = new HBox(8, edit, delete);
             actions.setAlignment(Pos.CENTER_RIGHT);
             card.getChildren().add(actions);
         }
@@ -442,12 +457,21 @@ public class PortfolioApp extends Application {
         detailRoot.setCenter(detailScroller);
 
         pageHost.getChildren().setAll(detailRoot);
+        currentDetailItem = item;
     }
 
     /** Swaps the window's content back to the main page. */
     private void showMain() {
         pageHost.getChildren().setAll(mainRoot);
+        currentDetailItem = null;
         refresh();
+    }
+
+    /** Rebuilds the detail page in place if it's the one currently open, so an edit shows up right away. */
+    private void refreshDetailIfShowing(Item item) {
+        if (currentDetailItem == item) {
+            showItemDetail(item);
+        }
     }
 
     // ------------------------------------------------------- cursor effects
@@ -542,7 +566,18 @@ public class PortfolioApp extends Application {
         description.getStyleClass().add("hero-about");
         description.setWrapText(true);
 
-        VBox infoBox = new VBox(12, title, meta, description);
+        Button editButton = new Button("Edit");
+        editButton.getStyleClass().add("ghost-button");
+        editButton.visibleProperty().bind(ownerMode);
+        editButton.managedProperty().bind(ownerMode);
+        editButton.setOnAction(e -> showItemDialog(item, null));
+
+        Region titleSpacer = new Region();
+        HBox.setHgrow(titleSpacer, Priority.ALWAYS);
+        HBox titleRow = new HBox(10, title, titleSpacer, editButton);
+        titleRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox infoBox = new VBox(12, titleRow, meta, description);
         if (!item.getLink().isBlank()) {
             Hyperlink link = new Hyperlink(item.getLink());
             link.getStyleClass().add("card-link");
@@ -906,7 +941,7 @@ public class PortfolioApp extends Application {
         if (!ownerMode.get() && !requestLogin()) {
             return;
         }
-        showAddDialog(null);
+        showItemDialog(null, null);
     }
 
     private boolean requestLogin() {
@@ -936,23 +971,80 @@ public class PortfolioApp extends Application {
         return false;
     }
 
-    /** presetType pre-selects the Type dropdown (e.g. when opened from a specific section's "+ Add"); null defaults to Project. */
-    private void showAddDialog(Item.Type presetType) {
+    private void showChangePasswordDialog() {
+        PasswordField current = new PasswordField();
+        current.setPromptText("Current password");
+
+        PasswordField newPassword = new PasswordField();
+        newPassword.setPromptText("New password");
+
+        PasswordField confirm = new PasswordField();
+        confirm.setPromptText("Confirm new password");
+
+        VBox content = new VBox(8,
+                new Label("Current password"), current,
+                new Label("New password"), newPassword,
+                new Label("Confirm new password"), confirm);
+        content.setPadding(new Insets(6, 0, 0, 0));
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Change password");
+        dialog.setHeaderText("Set a new owner password");
+        dialog.getDialogPane().setContent(content);
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        dialog.setResultConverter(button -> button);
+        applyStylesheet(dialog);
+
+        Optional<ButtonType> result = dialog.showAndWait();
+        if (result.isEmpty() || result.get() != ButtonType.OK) {
+            return;
+        }
+
+        if (!Auth.verify(current.getText())) {
+            info("Incorrect password", "Your current password is incorrect. Nothing was changed.");
+            return;
+        }
+        if (newPassword.getText() == null || newPassword.getText().isBlank()) {
+            info("Password required", "Please enter a new password. Nothing was changed.");
+            return;
+        }
+        if (!newPassword.getText().equals(confirm.getText())) {
+            info("Passwords don't match", "The new password and its confirmation must match. Nothing was changed.");
+            return;
+        }
+
+        if (Auth.changePassword(newPassword.getText())) {
+            info("Password changed", "Your owner password has been updated.");
+        } else {
+            info("Could not save", "The new password could not be saved. "
+                    + "Check that the app can write to the data folder.");
+        }
+    }
+
+    /**
+     * Shared Add/Edit dialog. existing == null adds a new entry; otherwise the form is pre-filled
+     * from it and OK updates it in place instead of creating a new one. presetType only applies
+     * when existing is null (e.g. opened from a specific section's "+ Add"); it's ignored otherwise
+     * since an existing item's own type is used instead.
+     */
+    private void showItemDialog(Item existing, Item.Type presetType) {
+        boolean editing = existing != null;
+
         ComboBox<Item.Type> type = new ComboBox<>(FXCollections.observableArrayList(Item.Type.values()));
-        type.setValue(presetType != null ? presetType : Item.Type.PROJECT);
+        type.setValue(editing ? existing.getType() : (presetType != null ? presetType : Item.Type.PROJECT));
         type.setMaxWidth(Double.MAX_VALUE);
 
-        TextField title = new TextField();
+        TextField title = new TextField(editing ? existing.getTitle() : "");
         title.setPromptText("Title");
 
-        TextArea description = new TextArea();
+        TextArea description = new TextArea(editing ? existing.getDescription() : "");
         description.setPromptText("Short description");
         description.setPrefRowCount(4);
         description.setWrapText(true);
 
         ComboBox<Item.Status> status =
                 new ComboBox<>(FXCollections.observableArrayList(Item.Status.values()));
-        status.setValue(Item.Status.NOT_STARTED);
+        status.setValue(editing && existing.getStatus() != null ? existing.getStatus() : Item.Status.NOT_STARTED);
         status.setMaxWidth(Double.MAX_VALUE);
 
         Label statusLabel = new Label("Status");
@@ -961,48 +1053,25 @@ public class PortfolioApp extends Application {
         statusLabel.visibleProperty().bind(status.visibleProperty());
         statusLabel.managedProperty().bind(status.visibleProperty());
 
-        TextField link = new TextField();
+        TextField link = new TextField(editing ? existing.getLink() : "");
         link.setPromptText("https://… (optional)");
 
-        TextField year = new TextField();
+        TextField year = new TextField(editing ? existing.getYear() : "");
         year.setPromptText("2026 (optional)");
 
-        File[] chosenPhoto = new File[1];
-        Label photoLabel = new Label("No photo chosen");
-        photoLabel.getStyleClass().add("card-text");
-        Button choosePhoto = new Button("Choose photo…");
-        choosePhoto.getStyleClass().add("ghost-button");
-        choosePhoto.setOnAction(e -> {
-            FileChooser chooser = new FileChooser();
-            chooser.setTitle("Choose a photo");
-            chooser.getExtensionFilters().add(
-                    new FileChooser.ExtensionFilter("Images", "*.png", "*.jpg", "*.jpeg", "*.gif"));
-            File selected = chooser.showOpenDialog(stage);
-            if (selected != null) {
-                chosenPhoto[0] = selected;
-                photoLabel.setText(selected.getName());
-            }
-        });
-        HBox photoRow = new HBox(10, choosePhoto, photoLabel);
-        photoRow.setAlignment(Pos.CENTER_LEFT);
+        HBox photoRow = buildAttachmentRow(
+                editing ? existing.getImagePath() : "",
+                "Choose photo…",
+                new FileChooser.ExtensionFilter("Images", "*.png", "*.jpg", "*.jpeg", "*.gif"));
+        File[] chosenPhoto = (File[]) photoRow.getProperties().get("chosen");
+        boolean[] removePhoto = (boolean[]) photoRow.getProperties().get("remove");
 
-        File[] chosenPdf = new File[1];
-        Label pdfLabel = new Label("No PDF chosen");
-        pdfLabel.getStyleClass().add("card-text");
-        Button choosePdf = new Button("Choose PDF…");
-        choosePdf.getStyleClass().add("ghost-button");
-        choosePdf.setOnAction(e -> {
-            FileChooser chooser = new FileChooser();
-            chooser.setTitle("Choose a PDF");
-            chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PDF files", "*.pdf"));
-            File selected = chooser.showOpenDialog(stage);
-            if (selected != null) {
-                chosenPdf[0] = selected;
-                pdfLabel.setText(selected.getName());
-            }
-        });
-        HBox pdfRow = new HBox(10, choosePdf, pdfLabel);
-        pdfRow.setAlignment(Pos.CENTER_LEFT);
+        HBox pdfRow = buildAttachmentRow(
+                editing ? existing.getPdfPath() : "",
+                "Choose PDF…",
+                new FileChooser.ExtensionFilter("PDF files", "*.pdf"));
+        File[] chosenPdf = (File[]) pdfRow.getProperties().get("chosen");
+        boolean[] removePdf = (boolean[]) pdfRow.getProperties().get("remove");
 
         GridPane form = new GridPane();
         form.setHgap(12);
@@ -1018,14 +1087,16 @@ public class PortfolioApp extends Application {
         form.addRow(7, new Label("PDF"), pdfRow);
 
         Dialog<Item> dialog = new Dialog<>();
-        dialog.setTitle("Add entry");
-        dialog.setHeaderText("New project, research paper or achievement");
+        dialog.setTitle(editing ? "Edit entry" : "Add entry");
+        dialog.setHeaderText(editing
+                ? "Editing \"" + existing.getTitle() + "\""
+                : "New project, research paper or achievement");
         dialog.getDialogPane().setContent(form);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
         applyStylesheet(dialog);
 
         Node okButton = dialog.getDialogPane().lookupButton(ButtonType.OK);
-        okButton.setDisable(true);
+        okButton.setDisable(title.getText().isBlank());
         title.textProperty().addListener((obs, oldValue, newValue) ->
                 okButton.setDisable(newValue == null || newValue.isBlank()));
 
@@ -1033,17 +1104,99 @@ public class PortfolioApp extends Application {
             if (button != ButtonType.OK) {
                 return null;
             }
-            Item.Status chosen = type.getValue() == Item.Type.RESEARCH ? status.getValue() : null;
-            String imagePath = chosenPhoto[0] != null ? copyAttachment(chosenPhoto[0], "images") : "";
-            String pdfPath = chosenPdf[0] != null ? copyAttachment(chosenPdf[0], "pdfs") : "";
+            Item.Status chosenStatus = type.getValue() == Item.Type.RESEARCH ? status.getValue() : null;
+            String imagePath = resolveAttachmentPath(
+                    chosenPhoto[0], removePhoto[0], editing ? existing.getImagePath() : "", "images");
+            String pdfPath = resolveAttachmentPath(
+                    chosenPdf[0], removePdf[0], editing ? existing.getPdfPath() : "", "pdfs");
+
+            if (editing) {
+                existing.setType(type.getValue());
+                existing.setTitle(title.getText().trim());
+                existing.setDescription(description.getText().trim());
+                existing.setStatus(chosenStatus);
+                existing.setLink(link.getText().trim());
+                existing.setYear(year.getText().trim());
+                existing.setImagePath(imagePath);
+                existing.setPdfPath(pdfPath);
+                return existing;
+            }
             return new Item(type.getValue(), title.getText().trim(), description.getText().trim(),
-                    chosen, link.getText().trim(), year.getText().trim(), imagePath, pdfPath);
+                    chosenStatus, link.getText().trim(), year.getText().trim(), imagePath, pdfPath);
         });
 
         dialog.showAndWait().ifPresent(item -> {
-            store.addItem(item);
+            if (editing) {
+                store.updateItem(item);
+            } else {
+                store.addItem(item);
+            }
             refresh();
+            refreshDetailIfShowing(item);
         });
+    }
+
+    /**
+     * Builds a "Choose file… [Remove] current-or-chosen-name" row for the Add/Edit dialog. The
+     * File[1] and boolean[1] arrays tracking the user's choice are stashed on the row's own
+     * properties map (under "chosen"/"remove") so the caller can read them back after the dialog
+     * closes, without needing three near-identical private fields per attachment type.
+     */
+    private HBox buildAttachmentRow(String existingPath, String chooseLabel, FileChooser.ExtensionFilter filter) {
+        boolean hasExisting = existingPath != null && !existingPath.isBlank();
+
+        File[] chosen = new File[1];
+        boolean[] remove = new boolean[1];
+
+        Label label = new Label(hasExisting ? "Current: " + new File(existingPath).getName() : "None attached");
+        label.getStyleClass().add("card-text");
+
+        Button chooseButton = new Button(chooseLabel);
+        chooseButton.getStyleClass().add("ghost-button");
+
+        Button removeButton = new Button("Remove");
+        removeButton.getStyleClass().add("danger-button");
+        removeButton.setVisible(hasExisting);
+        removeButton.setManaged(hasExisting);
+
+        chooseButton.setOnAction(e -> {
+            FileChooser chooser = new FileChooser();
+            chooser.setTitle(chooseLabel.replace("…", ""));
+            chooser.getExtensionFilters().add(filter);
+            File selected = chooser.showOpenDialog(stage);
+            if (selected != null) {
+                chosen[0] = selected;
+                remove[0] = false;
+                label.setText(selected.getName());
+                removeButton.setVisible(true);
+                removeButton.setManaged(true);
+            }
+        });
+
+        removeButton.setOnAction(e -> {
+            chosen[0] = null;
+            remove[0] = true;
+            label.setText("None attached");
+            removeButton.setVisible(false);
+            removeButton.setManaged(false);
+        });
+
+        HBox row = new HBox(10, chooseButton, removeButton, label);
+        row.setAlignment(Pos.CENTER_LEFT);
+        row.getProperties().put("chosen", chosen);
+        row.getProperties().put("remove", remove);
+        return row;
+    }
+
+    /** Newly chosen file wins; otherwise "removed" clears it; otherwise the existing path is kept as-is. */
+    private String resolveAttachmentPath(File chosen, boolean removed, String existingPath, String subfolder) {
+        if (chosen != null) {
+            return copyAttachment(chosen, subfolder);
+        }
+        if (removed) {
+            return "";
+        }
+        return existingPath == null ? "" : existingPath;
     }
 
     /**
