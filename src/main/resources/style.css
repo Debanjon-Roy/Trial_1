@@ -1,0 +1,337 @@
+/* ==========================================================================
+   Scarlet red theme
+   Change SCARLET below to shift the whole palette at once.
+   ========================================================================== */
+
+.root {
+    -fx-font-family: "Segoe UI", "Noto Sans", "Helvetica Neue", sans-serif;
+}
+
+.root-pane {
+    -fx-background-color: linear-gradient(to bottom, #FF2400 0%, #D81E00 45%, #A81400 100%);
+}
+
+.scroller {
+    -fx-background-color: transparent;
+}
+
+.scroller > .viewport {
+    -fx-background-color: transparent;
+}
+
+.scroller .scroll-bar:vertical {
+    -fx-background-color: transparent;
+}
+
+.scroller .scroll-bar:vertical .thumb {
+    -fx-background-color: rgba(255, 255, 255, 0.35);
+    -fx-background-radius: 6;
+}
+
+.content {
+    -fx-padding: 26 40 46 40;
+}
+
+/* ------------------------------------------------------------------ header */
+
+.header {
+    -fx-padding: 14 24 14 24;
+    -fx-background-color: rgba(120, 10, 0, 0.55);
+    -fx-border-color: transparent transparent rgba(255, 255, 255, 0.22) transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.brand {
+    -fx-text-fill: white;
+    -fx-font-size: 19px;
+    -fx-font-weight: bold;
+}
+
+.owner-badge {
+    -fx-text-fill: #7A0E00;
+    -fx-background-color: #FFD54F;
+    -fx-background-radius: 10;
+    -fx-padding: 2 10 2 10;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+.search-field, .input {
+    -fx-background-color: rgba(255, 255, 255, 0.94);
+    -fx-background-radius: 8;
+    -fx-text-fill: #2B0800;
+    -fx-prompt-text-fill: #9A6A60;
+    -fx-padding: 7 12 7 12;
+    -fx-font-size: 13px;
+    -fx-highlight-fill: #FF2400;
+    -fx-highlight-text-fill: white;
+}
+
+.input .content {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.text-area {
+    -fx-background-radius: 8;
+}
+
+.text-area .content {
+    -fx-background-color: rgba(255, 255, 255, 0.94);
+    -fx-background-radius: 8;
+}
+
+.clear-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: white;
+    -fx-font-size: 13px;
+    -fx-cursor: hand;
+}
+
+.add-button {
+    -fx-background-color: white;
+    -fx-text-fill: #C21807;
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-min-width: 38;
+    -fx-min-height: 38;
+    -fx-max-width: 38;
+    -fx-max-height: 38;
+    -fx-background-radius: 19;
+    -fx-padding: 0;
+    -fx-cursor: hand;
+}
+
+.add-button:hover {
+    -fx-background-color: #FFE7E3;
+}
+
+.ghost-button {
+    -fx-background-color: transparent;
+    -fx-border-color: rgba(255, 255, 255, 0.75);
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-text-fill: white;
+    -fx-font-size: 12px;
+    -fx-padding: 6 14 6 14;
+    -fx-cursor: hand;
+}
+
+.ghost-button:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.18);
+}
+
+.primary-button {
+    -fx-background-color: white;
+    -fx-text-fill: #B01503;
+    -fx-font-weight: bold;
+    -fx-font-size: 13px;
+    -fx-background-radius: 8;
+    -fx-padding: 8 20 8 20;
+    -fx-cursor: hand;
+}
+
+.primary-button:hover {
+    -fx-background-color: #FFE7E3;
+}
+
+.danger-button {
+    -fx-background-color: rgba(0, 0, 0, 0.28);
+    -fx-text-fill: #FFD9D2;
+    -fx-font-size: 11px;
+    -fx-background-radius: 6;
+    -fx-padding: 4 12 4 12;
+    -fx-cursor: hand;
+}
+
+.danger-button:hover {
+    -fx-background-color: rgba(0, 0, 0, 0.45);
+}
+
+/* ---------------------------------------------------------------- sections */
+
+.section {
+    -fx-background-color: rgba(88, 6, 0, 0.32);
+    -fx-background-radius: 16;
+    -fx-padding: 22 26 24 26;
+}
+
+.section-title {
+    -fx-text-fill: white;
+    -fx-font-size: 21px;
+    -fx-font-weight: bold;
+}
+
+.hero {
+    -fx-background-color: rgba(88, 6, 0, 0.42);
+}
+
+.hero-name {
+    -fx-text-fill: white;
+    -fx-font-size: 30px;
+    -fx-font-weight: bold;
+}
+
+.hero-tagline {
+    -fx-text-fill: #FFD9D2;
+    -fx-font-size: 14px;
+}
+
+.hero-about {
+    -fx-text-fill: rgba(255, 255, 255, 0.92);
+    -fx-font-size: 13.5px;
+}
+
+.photo-frame {
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 14, 0.2, 0, 4);
+}
+
+.photo-initials {
+    -fx-text-fill: white;
+    -fx-font-size: 40px;
+    -fx-font-weight: bold;
+}
+
+/* ------------------------------------------------------------------- cards */
+
+.card {
+    -fx-background-color: rgba(255, 255, 255, 0.12);
+    -fx-background-radius: 12;
+    -fx-padding: 16 18 16 18;
+    -fx-border-color: rgba(255, 255, 255, 0.18);
+    -fx-border-radius: 12;
+}
+
+.card-title {
+    -fx-text-fill: white;
+    -fx-font-size: 15.5px;
+    -fx-font-weight: bold;
+}
+
+.card-text {
+    -fx-text-fill: rgba(255, 255, 255, 0.90);
+    -fx-font-size: 13px;
+}
+
+.card-link {
+    -fx-text-fill: #FFE082;
+    -fx-font-size: 12px;
+    -fx-padding: 0;
+    -fx-border-color: transparent;
+}
+
+.empty-label {
+    -fx-text-fill: rgba(255, 255, 255, 0.72);
+    -fx-font-size: 12.5px;
+    -fx-font-style: italic;
+}
+
+/* -------------------------------------------------------------- status pills */
+
+.pill {
+    -fx-background-radius: 10;
+    -fx-padding: 3 11 3 11;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+.pill-neutral {
+    -fx-background-color: rgba(255, 255, 255, 0.22);
+    -fx-text-fill: white;
+}
+
+.status-completed {
+    -fx-background-color: #1DB954;
+    -fx-text-fill: white;
+}
+
+.status-ongoing {
+    -fx-background-color: #FFB300;
+    -fx-text-fill: #4A2800;
+}
+
+.status-not-started {
+    -fx-background-color: #B0B7BE;
+    -fx-text-fill: #23292E;
+}
+
+/* ----------------------------------------------------------------- contact */
+
+.contact-row {
+    -fx-background-color: rgba(255, 255, 255, 0.10);
+    -fx-background-radius: 12;
+    -fx-padding: 12 18 12 14;
+    -fx-min-width: 340;
+}
+
+.contact-row:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.20);
+}
+
+.contact-label {
+    -fx-text-fill: white;
+    -fx-font-size: 13.5px;
+    -fx-font-weight: bold;
+}
+
+.contact-value {
+    -fx-text-fill: rgba(255, 255, 255, 0.82);
+    -fx-font-size: 12px;
+}
+
+.logo-fallback {
+    -fx-text-fill: white;
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+}
+
+/* ---------------------------------------------------------------- comments */
+
+.comment-card {
+    -fx-background-color: rgba(255, 255, 255, 0.10);
+}
+
+.comment-header {
+    -fx-text-fill: #FFD9D2;
+    -fx-font-size: 11.5px;
+    -fx-font-weight: bold;
+}
+
+/* ----------------------------------------------------------------- dialogs */
+
+.app-dialog {
+    -fx-background-color: #FFF6F4;
+}
+
+.app-dialog .label {
+    -fx-text-fill: #3A0D06;
+}
+
+.app-dialog .header-panel {
+    -fx-background-color: #C21807;
+}
+
+.app-dialog .header-panel .label {
+    -fx-text-fill: white;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+}
+
+.app-dialog .button {
+    -fx-background-color: #C21807;
+    -fx-text-fill: white;
+    -fx-background-radius: 6;
+    -fx-padding: 6 18 6 18;
+    -fx-cursor: hand;
+}
+
+.app-dialog .button:hover {
+    -fx-background-color: #A81400;
+}
+
+.app-dialog .text-field,
+.app-dialog .password-field,
+.app-dialog .combo-box,
+.app-dialog .text-area {
+    -fx-background-radius: 6;
+}
