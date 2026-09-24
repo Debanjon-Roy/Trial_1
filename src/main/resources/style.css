@@ -1,12 +1,14 @@
 /* ==========================================================================
-   Scarlet red theme
-   Change SCARLET below to shift the whole palette at once.
+   Scarlet Red Glowing & 3D Glassmorphism Theme
+   Maintains the signature scarlet red background palette while infusing
+   ethereal glowing lighting, frosted glass panels, and 3D depth.
    ========================================================================== */
 
 .root {
     -fx-font-family: "Segoe UI", "Noto Sans", "Helvetica Neue", sans-serif;
 }
 
+/* Base background gradient preserved exactly as requested */
 .root-pane {
     -fx-background-color: linear-gradient(to bottom, #FF2400 0%, #D81E00 45%, #A81400 100%);
 }
@@ -24,8 +26,14 @@
 }
 
 .scroller .scroll-bar:vertical .thumb {
-    -fx-background-color: rgba(255, 255, 255, 0.35);
-    -fx-background-radius: 6;
+    -fx-background-color: rgba(255, 255, 255, 0.38);
+    -fx-background-radius: 8;
+    -fx-effect: dropshadow(gaussian, rgba(255, 200, 150, 0.3), 6, 0.2, 0, 0);
+}
+
+.scroller .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.65);
+    -fx-effect: dropshadow(gaussian, rgba(255, 220, 180, 0.6), 10, 0.35, 0, 0);
 }
 
 .content {
@@ -35,36 +43,53 @@
 /* ------------------------------------------------------------------ header */
 
 .header {
-    -fx-padding: 14 24 14 24;
-    -fx-background-color: rgba(120, 10, 0, 0.55);
-    -fx-border-color: transparent transparent rgba(255, 255, 255, 0.22) transparent;
+    -fx-padding: 14 26 14 26;
+    -fx-background-color: rgba(95, 8, 2, 0.65);
+    -fx-border-color: transparent transparent rgba(255, 215, 120, 0.32) transparent;
     -fx-border-width: 0 0 1 0;
+    -fx-effect: dropshadow(gaussian, rgba(30, 0, 0, 0.45), 14, 0.15, 0, 4);
 }
 
 .brand {
     -fx-text-fill: white;
-    -fx-font-size: 19px;
+    -fx-font-size: 20px;
     -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(255, 230, 180, 0.7), 12, 0.3, 0, 0);
 }
 
 .owner-badge {
-    -fx-text-fill: #7A0E00;
-    -fx-background-color: #FFD54F;
-    -fx-background-radius: 10;
-    -fx-padding: 2 10 2 10;
+    -fx-text-fill: #4E0B00;
+    -fx-background-color: linear-gradient(to bottom right, #FFE082, #FFB300);
+    -fx-background-radius: 12;
+    -fx-padding: 3 12 3 12;
     -fx-font-size: 11px;
     -fx-font-weight: bold;
+    -fx-border-color: rgba(255, 255, 255, 0.6);
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+    -fx-effect: dropshadow(gaussian, rgba(255, 200, 0, 0.75), 12, 0.4, 0, 0);
 }
 
 .search-field, .input {
-    -fx-background-color: rgba(255, 255, 255, 0.94);
-    -fx-background-radius: 8;
+    -fx-background-color: rgba(255, 255, 255, 0.93);
+    -fx-background-radius: 10;
+    -fx-border-radius: 10;
+    -fx-border-color: rgba(255, 255, 255, 0.35);
+    -fx-border-width: 1;
     -fx-text-fill: #2B0800;
-    -fx-prompt-text-fill: #9A6A60;
-    -fx-padding: 7 12 7 12;
+    -fx-prompt-text-fill: #8F594E;
+    -fx-padding: 8 14 8 14;
     -fx-font-size: 13px;
     -fx-highlight-fill: #FF2400;
     -fx-highlight-text-fill: white;
+    -fx-effect: dropshadow(gaussian, rgba(40, 2, 0, 0.25), 8, 0.1, 0, 2);
+}
+
+.search-field:focused, .input:focused {
+    -fx-background-color: #FFFFFF;
+    -fx-border-color: #FFD54F;
+    -fx-border-width: 1.5;
+    -fx-effect: dropshadow(gaussian, rgba(255, 215, 79, 0.85), 16, 0.45, 0, 0);
 }
 
 .input .content {
@@ -73,12 +98,12 @@
 }
 
 .text-area {
-    -fx-background-radius: 8;
+    -fx-background-radius: 10;
 }
 
 .text-area .content {
     -fx-background-color: rgba(255, 255, 255, 0.94);
-    -fx-background-radius: 8;
+    -fx-background-radius: 10;
 }
 
 .clear-button {
@@ -88,136 +113,190 @@
     -fx-cursor: hand;
 }
 
+.clear-button:hover {
+    -fx-text-fill: #FFE082;
+    -fx-effect: dropshadow(gaussian, rgba(255, 215, 0, 0.8), 8, 0.4, 0, 0);
+}
+
 .add-button {
-    -fx-background-color: white;
+    -fx-background-color: linear-gradient(to bottom, #FFFFFF 0%, #FFF0EB 100%);
     -fx-text-fill: #C21807;
-    -fx-font-size: 20px;
+    -fx-font-size: 21px;
     -fx-font-weight: bold;
     -fx-min-width: 38;
     -fx-min-height: 38;
     -fx-max-width: 38;
     -fx-max-height: 38;
     -fx-background-radius: 19;
+    -fx-border-radius: 19;
+    -fx-border-color: rgba(255, 255, 255, 0.9);
+    -fx-border-width: 1;
     -fx-padding: 0;
     -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(255, 200, 100, 0.65), 14, 0.35, 0, 2);
 }
 
 .add-button:hover {
-    -fx-background-color: #FFE7E3;
+    -fx-background-color: #FFFFFF;
+    -fx-border-color: #FFE082;
+    -fx-effect: dropshadow(gaussian, rgba(255, 215, 0, 0.95), 20, 0.55, 0, 0);
 }
 
 .ghost-button {
-    -fx-background-color: transparent;
-    -fx-border-color: rgba(255, 255, 255, 0.75);
-    -fx-border-radius: 8;
-    -fx-background-radius: 8;
+    -fx-background-color: rgba(255, 255, 255, 0.10);
+    -fx-border-color: rgba(255, 255, 255, 0.70);
+    -fx-border-radius: 9;
+    -fx-background-radius: 9;
+    -fx-border-width: 1;
     -fx-text-fill: white;
-    -fx-font-size: 12px;
-    -fx-padding: 6 14 6 14;
+    -fx-font-size: 12.5px;
+    -fx-padding: 7 16 7 16;
     -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(40, 2, 0, 0.2), 6, 0.1, 0, 2);
 }
 
 .ghost-button:hover {
-    -fx-background-color: rgba(255, 255, 255, 0.18);
+    -fx-background-color: rgba(255, 255, 255, 0.24);
+    -fx-border-color: #FFE082;
+    -fx-text-fill: #FFFFFF;
+    -fx-effect: dropshadow(gaussian, rgba(255, 215, 120, 0.75), 14, 0.35, 0, 0);
 }
 
 .primary-button {
-    -fx-background-color: white;
-    -fx-text-fill: #B01503;
+    -fx-background-color: linear-gradient(to bottom, #FFFFFF 0%, #FFF3EE 100%);
+    -fx-text-fill: #A81400;
     -fx-font-weight: bold;
     -fx-font-size: 13px;
-    -fx-background-radius: 8;
-    -fx-padding: 8 20 8 20;
+    -fx-background-radius: 9;
+    -fx-border-radius: 9;
+    -fx-border-color: rgba(255, 255, 255, 0.85);
+    -fx-border-width: 1;
+    -fx-padding: 8 22 8 22;
     -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(255, 150, 80, 0.5), 14, 0.22, 0, 3);
 }
 
 .primary-button:hover {
-    -fx-background-color: #FFE7E3;
+    -fx-background-color: #FFFFFF;
+    -fx-border-color: #FFE082;
+    -fx-effect: dropshadow(gaussian, rgba(255, 215, 80, 0.9), 20, 0.45, 0, 0);
 }
 
 .danger-button {
-    -fx-background-color: rgba(0, 0, 0, 0.28);
+    -fx-background-color: rgba(0, 0, 0, 0.32);
+    -fx-border-color: rgba(255, 180, 160, 0.3);
+    -fx-border-radius: 7;
     -fx-text-fill: #FFD9D2;
     -fx-font-size: 11px;
-    -fx-background-radius: 6;
-    -fx-padding: 4 12 4 12;
+    -fx-background-radius: 7;
+    -fx-padding: 5 13 5 13;
     -fx-cursor: hand;
 }
 
 .danger-button:hover {
-    -fx-background-color: rgba(0, 0, 0, 0.45);
+    -fx-background-color: rgba(180, 20, 0, 0.65);
+    -fx-border-color: #FF5252;
+    -fx-effect: dropshadow(gaussian, rgba(255, 60, 60, 0.6), 10, 0.3, 0, 0);
 }
 
 /* ---------------------------------------------------------------- sections */
 
 .section {
-    -fx-background-color: rgba(88, 6, 0, 0.32);
-    -fx-background-radius: 16;
-    -fx-padding: 22 26 24 26;
+    -fx-background-color: linear-gradient(to bottom, rgba(88, 8, 2, 0.52) 0%, rgba(58, 4, 1, 0.44) 100%);
+    -fx-background-radius: 18;
+    -fx-border-radius: 18;
+    -fx-border-color: rgba(255, 255, 255, 0.22) rgba(255, 255, 255, 0.10) rgba(255, 215, 120, 0.16) rgba(255, 255, 255, 0.18);
+    -fx-border-width: 1;
+    -fx-padding: 24 28 26 28;
+    -fx-effect: dropshadow(gaussian, rgba(30, 2, 0, 0.45), 20, 0.15, 0, 8);
 }
 
 .section-title {
     -fx-text-fill: white;
-    -fx-font-size: 21px;
+    -fx-font-size: 22px;
     -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(255, 225, 160, 0.45), 10, 0.22, 0, 1);
 }
 
 .hero {
-    -fx-background-color: rgba(88, 6, 0, 0.42);
+    -fx-background-color: linear-gradient(to bottom right, rgba(100, 10, 2, 0.64) 0%, rgba(68, 5, 1, 0.54) 100%);
+    -fx-border-color: rgba(255, 225, 140, 0.35) rgba(255, 255, 255, 0.18) rgba(255, 215, 120, 0.25) rgba(255, 255, 255, 0.28);
+    -fx-border-width: 1.2;
+    -fx-effect: dropshadow(gaussian, rgba(25, 0, 0, 0.55), 24, 0.2, 0, 10);
 }
 
 .hero-name {
     -fx-text-fill: white;
-    -fx-font-size: 30px;
+    -fx-font-size: 32px;
     -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(255, 235, 180, 0.75), 16, 0.35, 0, 0);
 }
 
 .hero-tagline {
-    -fx-text-fill: #FFD9D2;
-    -fx-font-size: 14px;
+    -fx-text-fill: #FFE082;
+    -fx-font-size: 14.5px;
+    -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(255, 215, 0, 0.35), 8, 0.2, 0, 0);
 }
 
 .hero-about {
-    -fx-text-fill: rgba(255, 255, 255, 0.92);
+    -fx-text-fill: rgba(255, 255, 255, 0.94);
     -fx-font-size: 13.5px;
+    -fx-line-spacing: 2px;
 }
 
 .photo-frame {
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.45), 14, 0.2, 0, 4);
+    -fx-effect: dropshadow(gaussian, rgba(255, 200, 100, 0.6), 20, 0.3, 0, 4);
 }
 
 .photo-initials {
     -fx-text-fill: white;
     -fx-font-size: 40px;
     -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(255, 215, 100, 0.8), 12, 0.35, 0, 0);
 }
 
 /* ------------------------------------------------------------------- cards */
 
 .card {
-    -fx-background-color: rgba(255, 255, 255, 0.12);
-    -fx-background-radius: 12;
-    -fx-padding: 16 18 16 18;
-    -fx-border-color: rgba(255, 255, 255, 0.18);
-    -fx-border-radius: 12;
+    -fx-background-color: linear-gradient(to bottom right, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.05) 100%);
+    -fx-background-radius: 14;
+    -fx-border-radius: 14;
+    -fx-border-color: rgba(255, 255, 255, 0.32) rgba(255, 255, 255, 0.12) rgba(255, 215, 120, 0.20) rgba(255, 255, 255, 0.24);
+    -fx-border-width: 1;
+    -fx-padding: 18 20 18 20;
+    -fx-effect: dropshadow(gaussian, rgba(40, 2, 0, 0.35), 14, 0.12, 0, 5);
+}
+
+.card:hover {
+    -fx-background-color: linear-gradient(to bottom right, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.09) 100%);
+    -fx-border-color: #FFE082 rgba(255, 255, 255, 0.5) #FF8A65 rgba(255, 255, 255, 0.4);
+    -fx-effect: dropshadow(gaussian, rgba(255, 140, 60, 0.55), 22, 0.3, 0, 0);
 }
 
 .card-title {
     -fx-text-fill: white;
-    -fx-font-size: 15.5px;
+    -fx-font-size: 16px;
     -fx-font-weight: bold;
 }
 
 .card-text {
-    -fx-text-fill: rgba(255, 255, 255, 0.90);
+    -fx-text-fill: rgba(255, 255, 255, 0.92);
     -fx-font-size: 13px;
+    -fx-line-spacing: 2px;
 }
 
 .card-link {
     -fx-text-fill: #FFE082;
-    -fx-font-size: 12px;
+    -fx-font-size: 12.5px;
+    -fx-font-weight: bold;
     -fx-padding: 0;
     -fx-border-color: transparent;
+}
+
+.card-link:hover {
+    -fx-text-fill: #FFF59D;
+    -fx-effect: dropshadow(gaussian, rgba(255, 245, 157, 0.8), 8, 0.35, 0, 0);
 }
 
 .empty-label {
@@ -229,53 +308,69 @@
 /* -------------------------------------------------------------- status pills */
 
 .pill {
-    -fx-background-radius: 10;
-    -fx-padding: 3 11 3 11;
+    -fx-background-radius: 12;
+    -fx-padding: 4 12 4 12;
     -fx-font-size: 11px;
     -fx-font-weight: bold;
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
 }
 
 .pill-neutral {
-    -fx-background-color: rgba(255, 255, 255, 0.22);
+    -fx-background-color: rgba(255, 255, 255, 0.20);
+    -fx-border-color: rgba(255, 255, 255, 0.35);
     -fx-text-fill: white;
+    -fx-effect: dropshadow(gaussian, rgba(255, 255, 255, 0.25), 6, 0.15, 0, 0);
 }
 
 .status-completed {
-    -fx-background-color: #1DB954;
+    -fx-background-color: linear-gradient(to right, #00C853, #1DB954);
+    -fx-border-color: rgba(200, 255, 220, 0.6);
     -fx-text-fill: white;
+    -fx-effect: dropshadow(gaussian, rgba(0, 230, 118, 0.7), 12, 0.4, 0, 0);
 }
 
 .status-ongoing {
-    -fx-background-color: #FFB300;
-    -fx-text-fill: #4A2800;
+    -fx-background-color: linear-gradient(to right, #FF9100, #FFC107);
+    -fx-border-color: rgba(255, 240, 180, 0.7);
+    -fx-text-fill: #3E1E00;
+    -fx-effect: dropshadow(gaussian, rgba(255, 179, 0, 0.75), 12, 0.4, 0, 0);
 }
 
 .status-not-started {
-    -fx-background-color: #B0B7BE;
-    -fx-text-fill: #23292E;
+    -fx-background-color: linear-gradient(to right, #78909C, #B0BEC5);
+    -fx-border-color: rgba(255, 255, 255, 0.5);
+    -fx-text-fill: #1A2327;
+    -fx-effect: dropshadow(gaussian, rgba(176, 190, 197, 0.5), 8, 0.25, 0, 0);
 }
 
 /* ----------------------------------------------------------------- contact */
 
 .contact-row {
-    -fx-background-color: rgba(255, 255, 255, 0.10);
-    -fx-background-radius: 12;
-    -fx-padding: 12 18 12 14;
+    -fx-background-color: linear-gradient(to bottom right, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.05) 100%);
+    -fx-background-radius: 14;
+    -fx-border-radius: 14;
+    -fx-border-color: rgba(255, 255, 255, 0.25);
+    -fx-border-width: 1;
+    -fx-padding: 14 20 14 16;
     -fx-min-width: 340;
+    -fx-effect: dropshadow(gaussian, rgba(30, 2, 0, 0.3), 10, 0.1, 0, 4);
 }
 
 .contact-row:hover {
-    -fx-background-color: rgba(255, 255, 255, 0.20);
+    -fx-background-color: linear-gradient(to bottom right, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.10) 100%);
+    -fx-border-color: #FFE082;
+    -fx-effect: dropshadow(gaussian, rgba(255, 160, 60, 0.6), 18, 0.32, 0, 0);
 }
 
 .contact-label {
     -fx-text-fill: white;
-    -fx-font-size: 13.5px;
+    -fx-font-size: 14px;
     -fx-font-weight: bold;
 }
 
 .contact-value {
-    -fx-text-fill: rgba(255, 255, 255, 0.82);
+    -fx-text-fill: rgba(255, 255, 255, 0.85);
     -fx-font-size: 12px;
 }
 
@@ -288,13 +383,14 @@
 /* ---------------------------------------------------------------- comments */
 
 .comment-card {
-    -fx-background-color: rgba(255, 255, 255, 0.10);
+    -fx-background-color: linear-gradient(to bottom right, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.04) 100%);
 }
 
 .comment-header {
-    -fx-text-fill: #FFD9D2;
-    -fx-font-size: 11.5px;
+    -fx-text-fill: #FFE082;
+    -fx-font-size: 12px;
     -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(255, 215, 0, 0.3), 6, 0.15, 0, 0);
 }
 
 /* ----------------------------------------------------------------- dialogs */
@@ -339,25 +435,30 @@
 /* ------------------------------------------------------------------ nav bar */
 
 .nav-bar {
-    -fx-padding: 9 24 9 24;
-    -fx-background-color: rgba(120, 10, 0, 0.35);
-    -fx-border-color: transparent transparent rgba(255, 255, 255, 0.15) transparent;
+    -fx-padding: 10 24 10 24;
+    -fx-background-color: rgba(85, 7, 0, 0.48);
+    -fx-border-color: transparent transparent rgba(255, 255, 255, 0.18) transparent;
     -fx-border-width: 0 0 1 0;
 }
 
 .nav-button {
     -fx-background-color: transparent;
-    -fx-text-fill: rgba(255, 255, 255, 0.88);
+    -fx-text-fill: rgba(255, 255, 255, 0.90);
     -fx-font-size: 12.5px;
     -fx-font-weight: bold;
-    -fx-padding: 5 12 5 12;
-    -fx-background-radius: 6;
+    -fx-padding: 6 14 6 14;
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+    -fx-border-color: transparent;
+    -fx-border-width: 1;
     -fx-cursor: hand;
 }
 
 .nav-button:hover {
-    -fx-background-color: rgba(255, 255, 255, 0.16);
+    -fx-background-color: rgba(255, 255, 255, 0.22);
+    -fx-border-color: rgba(255, 220, 150, 0.5);
     -fx-text-fill: white;
+    -fx-effect: dropshadow(gaussian, rgba(255, 215, 100, 0.6), 12, 0.3, 0, 0);
 }
 
 /* -------------------------------------------------------------- clickable card body */
@@ -368,30 +469,96 @@
 
 .card-body-clickable:hover .card-title {
     -fx-text-fill: #FFE082;
-    -fx-underline: true;
+    -fx-effect: dropshadow(gaussian, rgba(255, 224, 130, 0.75), 10, 0.35, 0, 0);
+    -fx-underline: false;
 }
 
 /* --------------------------------------------------------------- detail page */
 
 .detail-title {
     -fx-text-fill: white;
-    -fx-font-size: 27px;
+    -fx-font-size: 28px;
     -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(255, 230, 180, 0.65), 14, 0.3, 0, 0);
 }
 
 .attachment-frame {
-    -fx-background-color: rgba(0, 0, 0, 0.25);
-    -fx-background-radius: 10;
-    -fx-padding: 10;
+    -fx-background-color: rgba(0, 0, 0, 0.3);
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+    -fx-border-color: rgba(255, 255, 255, 0.2);
+    -fx-border-width: 1;
+    -fx-padding: 12;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 14, 0.15, 0, 4);
 }
 
 /* ------------------------------------------------------------ loading overlay */
 
 .loading-overlay {
-    -fx-background-color: rgba(60, 4, 0, 0.72);
+    -fx-background-color: rgba(50, 3, 0, 0.82);
 }
 
 .loading-label {
-    -fx-text-fill: white;
-    -fx-font-size: 14px;
+    -fx-text-fill: #FFE082;
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-effect: dropshadow(gaussian, rgba(255, 215, 80, 0.65), 12, 0.35, 0, 0);
+}
+
+/* ------------------------------------------------------- 3D Components Styling */
+
+.tech-orb-container {
+    -fx-alignment: center;
+}
+
+.tech-orb-wrapper {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-background-radius: 18;
+    -fx-border-radius: 18;
+    -fx-border-color: rgba(255, 255, 255, 0.32) rgba(255, 255, 255, 0.12) rgba(255, 215, 120, 0.38) rgba(255, 255, 255, 0.22);
+    -fx-border-width: 1;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(255, 140, 60, 0.35), 18, 0.2, 0, 4);
+}
+
+.tech-orb-wrapper:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.15);
+    -fx-border-color: #FFE082;
+    -fx-effect: dropshadow(gaussian, rgba(255, 215, 80, 0.7), 24, 0.38, 0, 0);
+}
+
+.tech-orb-badge-pill {
+    -fx-background-color: rgba(0, 0, 0, 0.4);
+    -fx-background-radius: 12;
+    -fx-padding: 3 12 3 10;
+    -fx-border-color: rgba(255, 215, 80, 0.45);
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+}
+
+.tech-orb-badge {
+    -fx-text-fill: #FFE082;
+    -fx-font-size: 10.5px;
+    -fx-font-weight: bold;
+}
+
+.tech-coin-wrapper {
+    -fx-background-color: rgba(255, 255, 255, 0.08);
+    -fx-background-radius: 14;
+    -fx-border-radius: 14;
+    -fx-border-color: rgba(255, 215, 80, 0.4);
+    -fx-border-width: 1;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(255, 193, 7, 0.35), 14, 0.2, 0, 2);
+}
+
+.tech-coin-wrapper:hover {
+    -fx-border-color: #FFE082;
+    -fx-effect: dropshadow(gaussian, rgba(255, 215, 80, 0.7), 20, 0.35, 0, 0);
+}
+
+.tech-coin-label {
+    -fx-text-fill: #FFD54F;
+    -fx-font-size: 10px;
+    -fx-font-weight: bold;
 }

@@ -1,5 +1,6 @@
 package portfolio;
 
+import javafx.animation.AnimationTimer;
 import javafx.animation.FadeTransition;
 import javafx.animation.Interpolator;
 import javafx.animation.KeyFrame;
@@ -34,6 +35,7 @@ import javafx.scene.control.ScrollPane;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
+import javafx.scene.effect.DropShadow;
 import javafx.scene.effect.Glow;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -112,6 +114,9 @@ public class PortfolioApp extends Application {
     private VBox commentsBox;
     private Item currentDetailItem;
     private long lastParticleTime = 0;
+    private TechOrb3D techOrb;
+    private TechCoin3D techCoin;
+    private AnimationTimer ambientTimer;
 
     @Override
     public void start(Stage stage) {
@@ -154,7 +159,14 @@ public class PortfolioApp extends Application {
         detailScroller.setVisible(false);
         detailScroller.setManaged(false);
 
-        StackPane centerStack = new StackPane(mainScroller, detailScroller);
+        Pane ambientLayer = new Pane();
+        ambientLayer.setMouseTransparent(true);
+        ambientLayer.setPickOnBounds(false);
+        ambientTimer = UiEffects.startAmbientParticles(ambientLayer, 32);
+
+        StackPane centerStack = new StackPane(ambientLayer, mainScroller, detailScroller);
+        ambientLayer.prefWidthProperty().bind(centerStack.widthProperty());
+        ambientLayer.prefHeightProperty().bind(centerStack.heightProperty());
 
         BorderPane root = new BorderPane();
         root.getStyleClass().add("root-pane");
@@ -197,6 +209,15 @@ public class PortfolioApp extends Application {
 
     @Override
     public void stop() {
+        if (techOrb != null) {
+            techOrb.stopAnimation();
+        }
+        if (techCoin != null) {
+            techCoin.stopAnimation();
+        }
+        if (ambientTimer != null) {
+            ambientTimer.stop();
+        }
         Concurrency.shutdown();
     }
 
@@ -373,9 +394,12 @@ public class PortfolioApp extends Application {
         text.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(text, Priority.ALWAYS);
 
-        HBox hero = new HBox(26, photo, text);
+        techOrb = new TechOrb3D(175, 175);
+
+        HBox hero = new HBox(26, photo, text, techOrb);
         hero.setAlignment(Pos.CENTER_LEFT);
         hero.getStyleClass().addAll("section", "hero");
+        UiEffects.apply3DTilt(hero);
         return hero;
     }
 
@@ -471,6 +495,7 @@ public class PortfolioApp extends Application {
             card.getChildren().add(actions);
         }
 
+        UiEffects.apply3DTilt(card);
         return card;
     }
 
@@ -524,6 +549,7 @@ public class PortfolioApp extends Application {
 
         VBox detailCard = new VBox(14, title, meta, description);
         detailCard.getStyleClass().add("section");
+        UiEffects.apply3DTilt(detailCard);
 
         if (!item.getAttachmentPath().isBlank()) {
             Path file = ATTACHMENTS_DIR.resolve(item.getAttachmentPath());
@@ -623,11 +649,18 @@ public class PortfolioApp extends Application {
         amount.setPrefWidth(160);
         amount.getStyleClass().add("input");
 
+        techCoin = new TechCoin3D(110, 110);
+
         HBox presets = new HBox(8);
         for (int value : new int[]{100, 500, 1000, 2000}) {
             Button preset = new Button("৳" + value);
             preset.getStyleClass().add("ghost-button");
-            preset.setOnAction(e -> amount.setText(String.valueOf(value)));
+            preset.setOnAction(e -> {
+                amount.setText(String.valueOf(value));
+                if (techCoin != null) {
+                    techCoin.spinPulse();
+                }
+            });
             presets.getChildren().add(preset);
         }
 
@@ -638,13 +671,25 @@ public class PortfolioApp extends Application {
 
         Button donate = new Button("Donate with bKash");
         donate.getStyleClass().add("primary-button");
-        donate.setOnAction(e -> handleDonate(amount.getText(), donorName.getText()));
+        donate.setOnAction(e -> {
+            if (techCoin != null) {
+                techCoin.spinPulse();
+            }
+            handleDonate(amount.getText(), donorName.getText());
+        });
 
         HBox row = new HBox(10, amount, donorName, donate);
         row.setAlignment(Pos.CENTER_LEFT);
 
-        VBox section = new VBox(14, sectionTitle("Donate"), blurb, presets, row);
+        VBox inputsCol = new VBox(12, blurb, presets, row);
+        HBox.setHgrow(inputsCol, Priority.ALWAYS);
+
+        HBox donateContent = new HBox(22, inputsCol, techCoin);
+        donateContent.setAlignment(Pos.CENTER_LEFT);
+
+        VBox section = new VBox(14, sectionTitle("Donate"), donateContent);
         section.getStyleClass().add("section");
+        UiEffects.apply3DTilt(section);
         return section;
     }
 
@@ -704,6 +749,7 @@ public class PortfolioApp extends Application {
         row.getStyleClass().add("contact-row");
         row.setOnMouseClicked(e -> openLink(url));
         row.setCursor(Cursor.HAND);
+        UiEffects.apply3DTilt(row);
         return row;
     }
 
@@ -782,6 +828,7 @@ public class PortfolioApp extends Application {
             row.setAlignment(Pos.CENTER_RIGHT);
             card.getChildren().add(row);
         }
+        UiEffects.apply3DTilt(card);
         return card;
     }
 
@@ -986,6 +1033,7 @@ public class PortfolioApp extends Application {
 
     private Node circularPhoto(String basePath, double size) {
         Image image = loadImage(basePath);
+        Node photoNode;
         if (image != null) {
             ImageView view = new ImageView(image);
             view.setFitWidth(size);
@@ -993,21 +1041,36 @@ public class PortfolioApp extends Application {
             view.setPreserveRatio(false);
             Circle clip = new Circle(size / 2, size / 2, size / 2);
             view.setClip(clip);
-            StackPane frame = new StackPane(view);
-            frame.getStyleClass().add("photo-frame");
-            return frame;
+            photoNode = view;
+        } else {
+            Circle placeholder = new Circle(size / 2, Color.web("#FFFFFF", 0.18));
+            placeholder.setStroke(Color.web("#FFFFFF", 0.55));
+            placeholder.setStrokeWidth(2);
+
+            Label initials = new Label(initialsOf(profile.getName()));
+            initials.getStyleClass().add("photo-initials");
+
+            StackPane stack = new StackPane(placeholder, initials);
+            Tooltip.install(stack, new Tooltip("Put your photo at src/main/resources/images/profile.png (or .jpg/.jpeg)"));
+            photoNode = stack;
         }
 
-        Circle placeholder = new Circle(size / 2, Color.web("#FFFFFF", 0.18));
-        placeholder.setStroke(Color.web("#FFFFFF", 0.55));
-        placeholder.setStrokeWidth(2);
+        // Luminous glowing halo ring with gold/amber aura
+        Circle haloRing = new Circle(size / 2 + 5);
+        haloRing.setFill(Color.TRANSPARENT);
+        haloRing.setStroke(Color.web("#FFD54F", 0.85));
+        haloRing.setStrokeWidth(3.0);
+        haloRing.setEffect(new DropShadow(18, Color.web("#FFD54F", 0.85)));
 
-        Label initials = new Label(initialsOf(profile.getName()));
-        initials.getStyleClass().add("photo-initials");
+        Circle innerRim = new Circle(size / 2 + 1);
+        innerRim.setFill(Color.TRANSPARENT);
+        innerRim.setStroke(Color.web("#FFFFFF", 0.5));
+        innerRim.setStrokeWidth(1.2);
 
-        StackPane stack = new StackPane(placeholder, initials);
-        Tooltip.install(stack, new Tooltip("Put your photo at src/main/resources/images/profile.png (or .jpg/.jpeg)"));
-        return stack;
+        StackPane frame = new StackPane(haloRing, innerRim, photoNode);
+        frame.getStyleClass().add("photo-frame");
+        UiEffects.apply3DTilt(frame);
+        return frame;
     }
 
     private Node logoNode(String basePath, String fallbackText, String badgeColor) {
@@ -1114,35 +1177,11 @@ public class PortfolioApp extends Application {
 
     private void onCursorMoved(MouseEvent e) {
         long now = System.currentTimeMillis();
-        if (now - lastParticleTime < 28) {
+        if (now - lastParticleTime < 20) {
             return;
         }
         lastParticleTime = now;
-        spawnParticle(e.getSceneX(), e.getSceneY());
-    }
-
-    private void spawnParticle(double x, double y) {
-        boolean gold = Math.random() < 0.4;
-        Circle dot = new Circle(x, y, 4, gold ? Color.web("#FFD54F") : Color.web("#FFFFFF"));
-        dot.setOpacity(0.85);
-        dot.setMouseTransparent(true);
-        dot.setEffect(new Glow(0.6));
-        cursorLayer.getChildren().add(dot);
-
-        ScaleTransition scale = new ScaleTransition(Duration.millis(650), dot);
-        scale.setToX(2.2);
-        scale.setToY(2.2);
-
-        FadeTransition fade = new FadeTransition(Duration.millis(650), dot);
-        fade.setToValue(0);
-
-        ParallelTransition transition = new ParallelTransition(dot, scale, fade);
-        transition.setOnFinished(ev -> cursorLayer.getChildren().remove(dot));
-        transition.play();
-
-        if (cursorLayer.getChildren().size() > 60) {
-            cursorLayer.getChildren().remove(0);
-        }
+        UiEffects.spawnCursorSpark(cursorLayer, e.getSceneX(), e.getSceneY());
     }
 
     public static void main(String[] args) {
