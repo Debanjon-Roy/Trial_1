@@ -339,6 +339,8 @@
 
 .app-dialog {
     -fx-background-color: #FFF6F4;
+    -fx-background-radius: 10;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.55), 32, 0.3, 0, 10);
 }
 
 .app-dialog .label {
