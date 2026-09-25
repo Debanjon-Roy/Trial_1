@@ -250,6 +250,20 @@
     -fx-font-style: italic;
 }
 
+.card-clickable {
+    -fx-cursor: hand;
+}
+
+.card-clickable:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.20);
+}
+
+.card-hint {
+    -fx-text-fill: rgba(255, 255, 255, 0.55);
+    -fx-font-size: 11px;
+    -fx-font-style: italic;
+}
+
 /* -------------------------------------------------------------- status pills */
 
 .pill {

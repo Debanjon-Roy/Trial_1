@@ -12,11 +12,19 @@ public class Comment {
     private final String author;
     private final String text;
     private final LocalDateTime postedAt;
+    private final Integer itemId;
 
-    public Comment(String author, String text, LocalDateTime postedAt) {
+    /** itemId is null for a general comment, or an Item's id to attach it to that item's detail page. */
+    public Comment(String author, String text, LocalDateTime postedAt, Integer itemId) {
         this.author = author == null || author.isBlank() ? "Anonymous" : author.trim();
         this.text = text == null ? "" : text.trim();
         this.postedAt = postedAt == null ? LocalDateTime.now() : postedAt;
+        this.itemId = itemId;
+    }
+
+    /** Convenience constructor for a general comment not tied to any item. */
+    public Comment(String author, String text, LocalDateTime postedAt) {
+        this(author, text, postedAt, null);
     }
 
     public String getAuthor() {
@@ -29,6 +37,11 @@ public class Comment {
 
     public LocalDateTime getPostedAt() {
         return postedAt;
+    }
+
+    /** Null for a general comment; otherwise the id of the Item this comment belongs to. */
+    public Integer getItemId() {
+        return itemId;
     }
 
     public String getPostedAtDisplay() {
