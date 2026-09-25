@@ -1,5 +1,9 @@
 package portfolio;
 
+import javafx.animation.Interpolator;
+import javafx.animation.KeyFrame;
+import javafx.animation.KeyValue;
+import javafx.animation.Timeline;
 import javafx.application.Application;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.BooleanProperty;
@@ -7,8 +11,10 @@ import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
+import javafx.geometry.Bounds;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.util.Duration;
 import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
@@ -80,6 +86,9 @@ public class PortfolioApp extends Application {
     private VBox achievementsBox;
     private VBox commentsBox;
 
+    private VBox content;
+    private ScrollPane scroller;
+
     @Override
     public void start(Stage stage) {
         store.load();
@@ -92,24 +101,36 @@ public class PortfolioApp extends Application {
         VBox researchSection = buildItemSection("Research Work", researchBox);
         researchSection.getChildren().add(1, buildStatusLegend());
 
-        VBox content = new VBox(30);
+        Node aboutSection = buildAbout();
+        Node projectsSection = buildItemSection("Projects", projectsBox);
+        Node achievementsSection = buildItemSection("Achievements", achievementsBox);
+        Node donateSection = buildDonate();
+        Node contactSection = buildContact();
+        Node commentsSection = buildComments();
+
+        content = new VBox(30);
         content.getStyleClass().add("content");
         content.getChildren().addAll(
-                buildAbout(),
-                buildItemSection("Projects", projectsBox),
+                aboutSection,
+                projectsSection,
                 researchSection,
-                buildItemSection("Achievements", achievementsBox),
-                buildDonate(),
-                buildContact(),
-                buildComments());
+                achievementsSection,
+                donateSection,
+                contactSection,
+                commentsSection);
 
-        ScrollPane scroller = new ScrollPane(content);
+        scroller = new ScrollPane(content);
         scroller.setFitToWidth(true);
         scroller.getStyleClass().add("scroller");
 
+        Node navBar = buildNavBar(
+                aboutSection, projectsSection, researchSection,
+                achievementsSection, donateSection, contactSection, commentsSection);
+        VBox topBar = new VBox(buildHeader(), navBar);
+
         BorderPane root = new BorderPane();
         root.getStyleClass().add("root-pane");
-        root.setTop(buildHeader());
+        root.setTop(topBar);
         root.setCenter(scroller);
 
         searchQuery.addListener((obs, oldValue, newValue) -> refresh());
@@ -176,6 +197,55 @@ public class PortfolioApp extends Application {
         header.setAlignment(Pos.CENTER_LEFT);
         header.getStyleClass().add("header");
         return header;
+    }
+
+    // ------------------------------------------------------------ nav bar
+
+    private Node buildNavBar(Node about, Node projects, Node research,
+                             Node achievements, Node donate, Node contact, Node comments) {
+        HBox nav = new HBox(4,
+                navButton("About", about),
+                navButton("Projects", projects),
+                navButton("Research", research),
+                navButton("Achievements", achievements),
+                navButton("Donate", donate),
+                navButton("Contact", contact),
+                navButton("Comments", comments));
+        nav.setAlignment(Pos.CENTER_LEFT);
+        nav.getStyleClass().add("nav-bar");
+        return nav;
+    }
+
+    private Button navButton(String label, Node target) {
+        Button button = new Button(label);
+        button.getStyleClass().add("nav-button");
+        button.setOnAction(e -> scrollTo(target));
+        return button;
+    }
+
+    /** Smoothly scrolls the page so the given section lands at the top of the viewport. */
+    private void scrollTo(Node target) {
+        if (target == null || scroller == null || content == null) {
+            return;
+        }
+        // Force a layout pass first, since a recent search or owner-mode toggle
+        // may have changed how tall the content is since it was last measured.
+        content.applyCss();
+        content.layout();
+
+        Bounds targetBounds = content.sceneToLocal(target.localToScene(target.getBoundsInLocal()));
+        double scrollableHeight = content.getHeight() - scroller.getViewportBounds().getHeight();
+        double targetVvalue = scrollableHeight <= 0
+                ? 0
+                : clamp(targetBounds.getMinY() / scrollableHeight, 0, 1);
+
+        Timeline animation = new Timeline(new KeyFrame(Duration.millis(400),
+                new KeyValue(scroller.vvalueProperty(), targetVvalue, Interpolator.EASE_BOTH)));
+        animation.play();
+    }
+
+    private double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
     }
 
     // -------------------------------------------------------------- about
