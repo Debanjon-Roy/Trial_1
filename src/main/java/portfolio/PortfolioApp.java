@@ -356,7 +356,7 @@ public class PortfolioApp extends Application {
     // -------------------------------------------------------------- about
 
     private Node buildAbout() {
-        Node photo = circularPhoto("/images/profile.png", 130);
+        Node photo = circularPhoto("/images/profile", 130);
 
         Label name = new Label(profile.getName());
         name.getStyleClass().add("hero-name");
@@ -674,13 +674,13 @@ public class PortfolioApp extends Application {
         grid.setHgap(18);
         grid.setVgap(14);
 
-        grid.add(contactRow("/images/github.png", "GH", "#24292E",
+        grid.add(contactRow("/images/github", "GH", "#24292E",
                 "GitHub", profile.getGithubUrl(), profile.getGithubUrl()), 0, 0);
-        grid.add(contactRow("/images/linkedin.png", "in", "#0A66C2",
+        grid.add(contactRow("/images/linkedin", "in", "#0A66C2",
                 "LinkedIn", profile.getLinkedinUrl(), profile.getLinkedinUrl()), 1, 0);
-        grid.add(contactRow("/images/email.png", "@", "#D93025",
+        grid.add(contactRow("/images/email", "@", "#D93025",
                 "Email", profile.getEmail(), "mailto:" + profile.getEmail()), 0, 1);
-        grid.add(contactRow("/images/whatsapp.png", "W", "#25D366",
+        grid.add(contactRow("/images/whatsapp", "W", "#25D366",
                 "WhatsApp", "+" + profile.getWhatsapp(), "https://wa.me/" + profile.getWhatsapp()), 1, 1);
 
         VBox section = new VBox(14, sectionTitle("Contact Me"), grid);
@@ -984,8 +984,8 @@ public class PortfolioApp extends Application {
 
     // ------------------------------------------------------------- helpers
 
-    private Node circularPhoto(String resourcePath, double size) {
-        Image image = loadImage(resourcePath);
+    private Node circularPhoto(String basePath, double size) {
+        Image image = loadImage(basePath);
         if (image != null) {
             ImageView view = new ImageView(image);
             view.setFitWidth(size);
@@ -1006,12 +1006,12 @@ public class PortfolioApp extends Application {
         initials.getStyleClass().add("photo-initials");
 
         StackPane stack = new StackPane(placeholder, initials);
-        Tooltip.install(stack, new Tooltip("Put your photo at src/main/resources/images/profile.png"));
+        Tooltip.install(stack, new Tooltip("Put your photo at src/main/resources/images/profile.png (or .jpg/.jpeg)"));
         return stack;
     }
 
-    private Node logoNode(String resourcePath, String fallbackText, String badgeColor) {
-        Image image = loadImage(resourcePath);
+    private Node logoNode(String basePath, String fallbackText, String badgeColor) {
+        Image image = loadImage(basePath);
         if (image != null) {
             ImageView view = new ImageView(image);
             view.setFitWidth(30);
@@ -1026,8 +1026,33 @@ public class PortfolioApp extends Application {
         return new StackPane(badge, text);
     }
 
-    /** Looks on the classpath first, then next to the jar, so either layout works. */
-    private Image loadImage(String resourcePath) {
+    private static final String[] IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp", "webp"};
+
+    /**
+     * Looks for basePath + one of the common image extensions, in that order,
+     * on the classpath first and then next to the jar — so you never have to
+     * remember or match an exact file name/extension for your own photos.
+     * basePath has no extension, e.g. "/images/profile".
+     */
+    private Image loadImage(String basePath) {
+        for (String ext : IMAGE_EXTENSIONS) {
+            String path = basePath + "." + ext;
+            Image image = loadImageQuietly(path);
+            if (image == null) {
+                continue;
+            }
+            if (image.isError()) {
+                System.err.println("Found " + path + " but could not decode it: " + image.getException());
+                continue;
+            }
+            return image;
+        }
+        System.err.println("No image found for " + basePath
+                + " with any of these extensions: " + String.join(", ", IMAGE_EXTENSIONS));
+        return null;
+    }
+
+    private Image loadImageQuietly(String resourcePath) {
         try (InputStream stream = getClass().getResourceAsStream(resourcePath)) {
             if (stream != null) {
                 return new Image(stream);
