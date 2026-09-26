@@ -21,15 +21,15 @@ public class Profile {
 
     private static final Path FILE = Paths.get("data", "profile.properties");
 
-    private String name = "Debanjon Roy";
+    private String name = "Your Name";
     private String tagline = "Computer Science Undergraduate · Developer · Researcher";
     private String about = "I build software and study problems that sit close to real life. "
             + "Most of my work is in Java and Python, with a growing interest in applied machine "
             + "learning for climate and language data.";
-    private String githubUrl = "https://github.com/Debanjon-Roy";
+    private String githubUrl = "https://github.com/yourusername";
     private String linkedinUrl = "https://www.linkedin.com/in/yourusername";
-    private String email = "roydebanjon2004@gmail.com";
-    private String whatsapp = "8801741816336";
+    private String email = "you@example.com";
+    private String whatsapp = "8801XXXXXXXXX";
     // SHA-256 of "admin123". Change the password by editing password_hash in
     // data/profile.properties, not here.
     private String passwordHash = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9";
