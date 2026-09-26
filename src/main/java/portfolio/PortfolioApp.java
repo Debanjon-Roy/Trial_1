@@ -84,24 +84,13 @@ import java.util.stream.Collectors;
 public class PortfolioApp extends Application {
 
     // ----------------------------------------------------- personal details
-    // Edit these six lines and the app is yours.
-    private static final String MY_NAME = "Your Name";
-    private static final String MY_TAGLINE = "Computer Science Undergraduate · Developer · Researcher";
-    private static final String MY_ABOUT =
-            "I build software and study problems that sit close to real life. "
-                    + "Most of my work is in Java and Python, with a growing interest in "
-                    + "applied machine learning for climate and language data. I like projects "
-                    + "that ship, papers that answer a narrow question well, and code that the "
-                    + "next person can read.";
-
-    private static final String GITHUB_URL = "https://github.com/yourusername";
-    private static final String LINKEDIN_URL = "https://www.linkedin.com/in/yourusername";
-    private static final String EMAIL = "you@example.com";
-    private static final String WHATSAPP_NUMBER = "8801XXXXXXXXX"; // country code, no + and no spaces
+    // Your name, bio, links and password live in data/profile.properties, not
+    // here — see Profile.java. Edit that file; this class only reads it.
 
     private static final Path ATTACHMENTS_DIR = Paths.get("data", "attachments");
 
     // ------------------------------------------------------------- state
+    private final Profile profile = new Profile();
     private final Store store = new Store();
     private final BkashService bkash = new BkashService();
     private final ObservableList<Item> items = FXCollections.observableArrayList();
@@ -127,6 +116,7 @@ public class PortfolioApp extends Application {
     @Override
     public void start(Stage stage) {
         this.stage = stage;
+        profile.load();
 
         projectsBox = new VBox(14);
         researchBox = new VBox(14);
@@ -196,7 +186,7 @@ public class PortfolioApp extends Application {
             scene.getStylesheets().add(css.toExternalForm());
         }
 
-        stage.setTitle(MY_NAME + " — Portfolio");
+        stage.setTitle(profile.getName() + " — Portfolio");
         stage.setMinWidth(860);
         stage.setMinHeight(600);
         stage.setScene(scene);
@@ -285,7 +275,7 @@ public class PortfolioApp extends Application {
     // ------------------------------------------------------------- header
 
     private Node buildHeader() {
-        Label brand = new Label(MY_NAME);
+        Label brand = new Label(profile.getName());
         brand.getStyleClass().add("brand");
 
         TextField search = new TextField();
@@ -368,14 +358,14 @@ public class PortfolioApp extends Application {
     private Node buildAbout() {
         Node photo = circularPhoto("/images/profile.png", 130);
 
-        Label name = new Label(MY_NAME);
+        Label name = new Label(profile.getName());
         name.getStyleClass().add("hero-name");
 
-        Label tagline = new Label(MY_TAGLINE);
+        Label tagline = new Label(profile.getTagline());
         tagline.getStyleClass().add("hero-tagline");
         tagline.setWrapText(true);
 
-        Label about = new Label(MY_ABOUT);
+        Label about = new Label(profile.getAbout());
         about.getStyleClass().add("hero-about");
         about.setWrapText(true);
 
@@ -685,13 +675,13 @@ public class PortfolioApp extends Application {
         grid.setVgap(14);
 
         grid.add(contactRow("/images/github.png", "GH", "#24292E",
-                "GitHub", GITHUB_URL, GITHUB_URL), 0, 0);
+                "GitHub", profile.getGithubUrl(), profile.getGithubUrl()), 0, 0);
         grid.add(contactRow("/images/linkedin.png", "in", "#0A66C2",
-                "LinkedIn", LINKEDIN_URL, LINKEDIN_URL), 1, 0);
+                "LinkedIn", profile.getLinkedinUrl(), profile.getLinkedinUrl()), 1, 0);
         grid.add(contactRow("/images/email.png", "@", "#D93025",
-                "Email", EMAIL, "mailto:" + EMAIL), 0, 1);
+                "Email", profile.getEmail(), "mailto:" + profile.getEmail()), 0, 1);
         grid.add(contactRow("/images/whatsapp.png", "W", "#25D366",
-                "WhatsApp", "+" + WHATSAPP_NUMBER, "https://wa.me/" + WHATSAPP_NUMBER), 1, 1);
+                "WhatsApp", "+" + profile.getWhatsapp(), "https://wa.me/" + profile.getWhatsapp()), 1, 1);
 
         VBox section = new VBox(14, sectionTitle("Contact Me"), grid);
         section.getStyleClass().add("section");
@@ -888,7 +878,7 @@ public class PortfolioApp extends Application {
         if (result.isEmpty() || result.get() == null) {
             return false;
         }
-        if (Auth.verify(result.get())) {
+        if (Auth.verify(result.get(), profile.getPasswordHash())) {
             ownerMode.set(true);
             return true;
         }
@@ -1012,7 +1002,7 @@ public class PortfolioApp extends Application {
         placeholder.setStroke(Color.web("#FFFFFF", 0.55));
         placeholder.setStrokeWidth(2);
 
-        Label initials = new Label(initialsOf(MY_NAME));
+        Label initials = new Label(initialsOf(profile.getName()));
         initials.getStyleClass().add("photo-initials");
 
         StackPane stack = new StackPane(placeholder, initials);
