@@ -4,6 +4,10 @@ package portfolio;
  * One entry in the portfolio. A project, a research paper or an achievement.
  * Status is only meaningful for research papers, but it is stored for every item
  * so the file format stays uniform.
+ *
+ * id is -1 until the item has been saved to the database, at which point Store
+ * fills in the real database id. attachmentPath holds just the file name inside
+ * data/attachments (not a full path), or "" when there is no attachment.
  */
 public class Item {
 
@@ -55,39 +59,37 @@ public class Item {
         }
     }
 
-    private Integer id;
+    private int id;
     private Type type;
     private String title;
     private String description;
     private Status status;
     private String link;
     private String year;
-    private String imagePath;
-    private String pdfPath;
+    private String attachmentPath;
 
-    public Item(Type type, String title, String description, Status status, String link, String year,
-                String imagePath, String pdfPath) {
+    /** Convenience constructor for a brand new item that has not been saved yet. */
+    public Item(Type type, String title, String description, Status status, String link, String year) {
+        this(-1, type, title, description, status, link, year, "");
+    }
+
+    public Item(int id, Type type, String title, String description, Status status,
+                String link, String year, String attachmentPath) {
+        this.id = id;
         this.type = type;
         this.title = title == null ? "" : title;
         this.description = description == null ? "" : description;
         this.status = status;
         this.link = link == null ? "" : link;
         this.year = year == null ? "" : year;
-        this.imagePath = imagePath == null ? "" : imagePath;
-        this.pdfPath = pdfPath == null ? "" : pdfPath;
+        this.attachmentPath = attachmentPath == null ? "" : attachmentPath;
     }
 
-    /** Convenience constructor for entries with no photo or PDF attached. */
-    public Item(Type type, String title, String description, Status status, String link, String year) {
-        this(type, title, description, status, link, year, "", "");
-    }
-
-    /** The database row id. Null until the item has been saved via Store. */
-    public Integer getId() {
+    public int getId() {
         return id;
     }
 
-    public void setId(Integer id) {
+    public void setId(int id) {
         this.id = id;
     }
 
@@ -139,22 +141,12 @@ public class Item {
         this.year = year;
     }
 
-    /** Path to an attached photo, or "" if none was added. */
-    public String getImagePath() {
-        return imagePath;
+    public String getAttachmentPath() {
+        return attachmentPath;
     }
 
-    public void setImagePath(String imagePath) {
-        this.imagePath = imagePath == null ? "" : imagePath;
-    }
-
-    /** Path to an attached PDF, or "" if none was added. */
-    public String getPdfPath() {
-        return pdfPath;
-    }
-
-    public void setPdfPath(String pdfPath) {
-        this.pdfPath = pdfPath == null ? "" : pdfPath;
+    public void setAttachmentPath(String attachmentPath) {
+        this.attachmentPath = attachmentPath == null ? "" : attachmentPath;
     }
 
     /** Used by the search bar. An empty query matches everything. */
@@ -175,7 +167,9 @@ public class Item {
         return value != null && value.toLowerCase().contains(lowercaseQuery);
     }
 
-    // ---------------------------------------------------------------- storage
+    // ------------------------------------------------------- legacy text format
+    // Kept only so Store can do a one-time import of the old items.txt file
+    // from before SQLite was added. Not used for ongoing storage any more.
 
     public String serialize() {
         return String.join("|",

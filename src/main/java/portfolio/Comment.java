@@ -3,18 +3,28 @@ package portfolio;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-/** A message left by a visitor. */
+/**
+ * A message left by a visitor.
+ *
+ * itemId is null for a comment left in the general "Comments" section at the
+ * bottom of the page, or the id of a specific Item when the comment was left
+ * on that project/research paper/achievement's own detail page.
+ */
 public class Comment {
 
     private static final DateTimeFormatter DISPLAY =
             DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm");
 
+    private int id = -1;
     private final String author;
     private final String text;
     private final LocalDateTime postedAt;
-    private final Integer itemId;
+    private Integer itemId;
 
-    /** itemId is null for a general comment, or an Item's id to attach it to that item's detail page. */
+    public Comment(String author, String text, LocalDateTime postedAt) {
+        this(author, text, postedAt, null);
+    }
+
     public Comment(String author, String text, LocalDateTime postedAt, Integer itemId) {
         this.author = author == null || author.isBlank() ? "Anonymous" : author.trim();
         this.text = text == null ? "" : text.trim();
@@ -22,9 +32,12 @@ public class Comment {
         this.itemId = itemId;
     }
 
-    /** Convenience constructor for a general comment not tied to any item. */
-    public Comment(String author, String text, LocalDateTime postedAt) {
-        this(author, text, postedAt, null);
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
     }
 
     public String getAuthor() {
@@ -39,13 +52,17 @@ public class Comment {
         return postedAt;
     }
 
-    /** Null for a general comment; otherwise the id of the Item this comment belongs to. */
+    public String getPostedAtDisplay() {
+        return postedAt.format(DISPLAY);
+    }
+
+    /** Null means this is a general, site-wide comment rather than one tied to an item. */
     public Integer getItemId() {
         return itemId;
     }
 
-    public String getPostedAtDisplay() {
-        return postedAt.format(DISPLAY);
+    public void setItemId(Integer itemId) {
+        this.itemId = itemId;
     }
 
     public boolean matches(String queryText) {
@@ -55,6 +72,10 @@ public class Comment {
         String q = queryText.toLowerCase();
         return author.toLowerCase().contains(q) || text.toLowerCase().contains(q);
     }
+
+    // ------------------------------------------------------- legacy text format
+    // Kept only so Store can do a one-time import of the old comments.txt file
+    // from before SQLite was added. Not used for ongoing storage any more.
 
     public String serialize() {
         return String.join("|",
