@@ -107,6 +107,7 @@ public class PortfolioApp extends Application {
     private ScrollPane detailScroller;
     private StackPane loadingOverlay;
     private Pane cursorLayer;
+    private BorderPane rootPane;
 
     private VBox projectsBox;
     private VBox researchBox;
@@ -115,6 +116,7 @@ public class PortfolioApp extends Application {
     private Item currentDetailItem;
     private long lastParticleTime = 0;
     private FireBackground fireBackground;
+    private DetailBackground detailBackground;
 
     @Override
     public void start(Stage stage) {
@@ -158,14 +160,20 @@ public class PortfolioApp extends Application {
         detailScroller.setManaged(false);
 
         fireBackground = new FireBackground();
-        StackPane centerStack = new StackPane(fireBackground, mainScroller, detailScroller);
+        detailBackground = new DetailBackground();
+        detailBackground.setVisible(false);
+        detailBackground.setManaged(false);
+
+        StackPane centerStack = new StackPane(fireBackground, detailBackground, mainScroller, detailScroller);
         fireBackground.prefWidthProperty().bind(centerStack.widthProperty());
         fireBackground.prefHeightProperty().bind(centerStack.heightProperty());
+        detailBackground.prefWidthProperty().bind(centerStack.widthProperty());
+        detailBackground.prefHeightProperty().bind(centerStack.heightProperty());
 
-        BorderPane root = new BorderPane();
-        root.getStyleClass().add("root-pane");
-        root.setTop(new VBox(buildHeader(), buildNavBar()));
-        root.setCenter(centerStack);
+        rootPane = new BorderPane();
+        rootPane.getStyleClass().add("root-pane");
+        rootPane.setTop(new VBox(buildHeader(), buildNavBar()));
+        rootPane.setCenter(centerStack);
 
         cursorLayer = new Pane();
         cursorLayer.setMouseTransparent(true);
@@ -173,7 +181,7 @@ public class PortfolioApp extends Application {
 
         loadingOverlay = buildLoadingOverlay();
 
-        StackPane sceneRoot = new StackPane(root, cursorLayer, loadingOverlay);
+        StackPane sceneRoot = new StackPane(rootPane, cursorLayer, loadingOverlay);
         cursorLayer.prefWidthProperty().bind(sceneRoot.widthProperty());
         cursorLayer.prefHeightProperty().bind(sceneRoot.heightProperty());
 
@@ -205,6 +213,9 @@ public class PortfolioApp extends Application {
     public void stop() {
         if (fireBackground != null) {
             fireBackground.stopAnimation();
+        }
+        if (detailBackground != null) {
+            detailBackground.stopAnimation();
         }
         Concurrency.shutdown();
     }
@@ -489,11 +500,28 @@ public class PortfolioApp extends Application {
 
     private void openDetail(Item item) {
         currentDetailItem = item;
+        // Configure and start the per-type animated background
+        detailBackground.setMode(item.getType());
+        detailBackground.startAnimation();
         detailScroller.setContent(buildDetailContent(item));
-        showDetailView();
+        showDetailView(item.getType());
     }
 
-    private void showDetailView() {
+    private void showDetailView(Item.Type type) {
+        // Swap CSS class on the root pane to shift the base gradient
+        stage.getScene().getRoot().getStyleClass().removeAll(
+                "detail-view-project", "detail-view-research", "detail-view-achievement");
+        stage.getScene().getRoot().getStyleClass().add(switch (type) {
+            case PROJECT -> "detail-view-project";
+            case RESEARCH -> "detail-view-research";
+            case ACHIEVEMENT -> "detail-view-achievement";
+        });
+
+        // Hide fire, show detail background
+        fireBackground.setVisible(false);
+        detailBackground.setVisible(true);
+        detailBackground.setManaged(true);
+
         mainScroller.setVisible(false);
         mainScroller.setManaged(false);
         detailScroller.setVisible(true);
@@ -502,6 +530,23 @@ public class PortfolioApp extends Application {
 
     private void showMainView() {
         currentDetailItem = null;
+
+        // Stop detail animation and hide it
+        if (detailBackground != null) {
+            detailBackground.stopAnimation();
+            detailBackground.setVisible(false);
+            detailBackground.setManaged(false);
+        }
+
+        // Restore fire background
+        if (fireBackground != null) {
+            fireBackground.setVisible(true);
+        }
+
+        // Remove detail-view CSS overrides
+        stage.getScene().getRoot().getStyleClass().removeAll(
+                "detail-view-project", "detail-view-research", "detail-view-achievement");
+
         detailScroller.setVisible(false);
         detailScroller.setManaged(false);
         mainScroller.setVisible(true);
