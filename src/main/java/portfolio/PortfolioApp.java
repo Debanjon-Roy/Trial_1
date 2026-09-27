@@ -9,6 +9,7 @@ import javafx.animation.ParallelTransition;
 import javafx.animation.ScaleTransition;
 import javafx.animation.Timeline;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
@@ -39,6 +40,8 @@ import javafx.scene.effect.DropShadow;
 import javafx.scene.effect.Glow;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.Clipboard;
+import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
@@ -63,6 +66,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -95,11 +99,21 @@ public class PortfolioApp extends Application {
     private final Profile profile = new Profile();
     private final Store store = new Store();
     private final BkashService bkash = new BkashService();
+    private GeminiService geminiService;
     private final ObservableList<Item> items = FXCollections.observableArrayList();
     private final ObservableList<Comment> comments = FXCollections.observableArrayList();
     private final BooleanProperty ownerMode = new SimpleBooleanProperty(false);
     private final StringProperty searchQuery = new SimpleStringProperty("");
     private final Map<String, Node> sectionAnchors = new LinkedHashMap<>();
+
+    private final List<GeminiService.ChatMessage> chatHistory = new ArrayList<>();
+    private VBox chatMessagesBox;
+    private ScrollPane chatScroller;
+    private TextField chatInputField;
+    private Button sendChatButton;
+    private HBox thinkingIndicator;
+    private VBox apiSetupCard;
+    private Label apiStatusBadge;
 
     private Stage stage;
     private VBox mainContent;
@@ -122,6 +136,7 @@ public class PortfolioApp extends Application {
     public void start(Stage stage) {
         this.stage = stage;
         profile.load();
+        geminiService = new GeminiService(profile);
 
         projectsBox = new VBox(14);
         researchBox = new VBox(14);
@@ -134,6 +149,7 @@ public class PortfolioApp extends Application {
         researchSection.getChildren().add(1, buildStatusLegend());
         Node achievementsSection = buildItemSection("Achievements", achievementsBox);
         Node donateSection = buildDonate();
+        Node chatSection = buildChatSection();
         Node contactSection = buildContact();
         Node commentsSection = buildCommentsSection("Comments", null, commentsBox);
 
@@ -142,11 +158,12 @@ public class PortfolioApp extends Application {
         sectionAnchors.put("Research", researchSection);
         sectionAnchors.put("Achievements", achievementsSection);
         sectionAnchors.put("Donate", donateSection);
+        sectionAnchors.put("Ask AI", chatSection);
         sectionAnchors.put("Contact", contactSection);
         sectionAnchors.put("Comments", commentsSection);
 
         mainContent = new VBox(30, about, projectsSection, researchSection, achievementsSection,
-                donateSection, contactSection, commentsSection);
+                donateSection, chatSection, contactSection, commentsSection);
         mainContent.getStyleClass().add("content");
 
         mainScroller = new ScrollPane(mainContent);
@@ -257,6 +274,10 @@ public class PortfolioApp extends Application {
     // ObservableLists inside onSuccess below is safe.
 
     private <T> void runBackground(Callable<T> work, Consumer<T> onSuccess) {
+        runBackground(work, onSuccess, null);
+    }
+
+    private <T> void runBackground(Callable<T> work, Consumer<T> onSuccess, Consumer<Throwable> onError) {
         Task<T> task = new Task<>() {
             @Override
             protected T call() throws Exception {
@@ -269,7 +290,11 @@ public class PortfolioApp extends Application {
             if (ex != null) {
                 ex.printStackTrace(); // full chain, including "Caused by:", visible in the Run console
             }
-            info("Something went wrong", ex == null ? "Unknown error." : describeError(ex));
+            if (onError != null) {
+                onError.accept(ex);
+            } else {
+                info("Something went wrong", ex == null ? "Unknown error." : describeError(ex));
+            }
         });
         Concurrency.pool().submit(task);
     }
@@ -346,7 +371,7 @@ public class PortfolioApp extends Application {
         bar.getStyleClass().add("nav-bar");
         bar.setAlignment(Pos.CENTER_LEFT);
         for (String label : List.of("About", "Projects", "Research", "Achievements",
-                "Donate", "Contact", "Comments")) {
+                "Donate", "Ask AI", "Contact", "Comments")) {
             Button button = new Button(label);
             button.getStyleClass().add("nav-button");
             button.setOnAction(e -> goToSection(label));
@@ -723,6 +748,365 @@ public class PortfolioApp extends Application {
         } else {
             info("bKash", result.message);
         }
+    }
+
+    // ----------------------------------------------------------- chatbot
+
+    private Node buildChatSection() {
+        Label title = sectionTitle("Ask AI Assistant");
+
+        Label subtitle = new Label("Confused about any project, research work, or technical detail? "
+                + "Ask Debanjon's AI assistant powered by Google Gemini!");
+        subtitle.getStyleClass().add("card-text");
+        subtitle.setWrapText(true);
+
+        apiStatusBadge = new Label();
+        updateChatApiStatus();
+
+        Button configKeyBtn = new Button("Configure Key");
+        configKeyBtn.getStyleClass().add("ghost-button");
+        configKeyBtn.setTooltip(new Tooltip("Set or view your Gemini API key"));
+        configKeyBtn.setOnAction(e -> {
+            boolean visible = !apiSetupCard.isVisible();
+            apiSetupCard.setVisible(visible);
+            apiSetupCard.setManaged(visible);
+        });
+
+        Region titleSpacer = new Region();
+        HBox.setHgrow(titleSpacer, Priority.ALWAYS);
+
+        HBox topBar = new HBox(12, new VBox(4, title, subtitle), titleSpacer, apiStatusBadge, configKeyBtn);
+        topBar.setAlignment(Pos.CENTER_LEFT);
+
+        apiSetupCard = buildApiSetupCard();
+        boolean isConfigured = geminiService != null && geminiService.isConfigured();
+        apiSetupCard.setVisible(!isConfigured);
+        apiSetupCard.setManaged(!isConfigured);
+
+        Node suggestionChips = buildSuggestionChips();
+
+        chatMessagesBox = new VBox(12);
+        chatScroller = new ScrollPane(chatMessagesBox);
+        chatScroller.setFitToWidth(true);
+        chatScroller.setPrefHeight(340);
+        chatScroller.setMaxHeight(460);
+        chatScroller.getStyleClass().addAll("scroller", "chat-scroller");
+
+        thinkingIndicator = buildThinkingIndicator();
+        thinkingIndicator.setVisible(false);
+        thinkingIndicator.setManaged(false);
+
+        chatInputField = new TextField();
+        chatInputField.setPromptText("Ask anything (e.g. 'Explain the research work', 'What are your top projects?')...");
+        chatInputField.getStyleClass().add("input");
+        HBox.setHgrow(chatInputField, Priority.ALWAYS);
+        chatInputField.setOnAction(e -> handleSendChatMessage(chatInputField.getText()));
+
+        sendChatButton = new Button("Ask AI ➔");
+        sendChatButton.getStyleClass().add("primary-button");
+        sendChatButton.setOnAction(e -> handleSendChatMessage(chatInputField.getText()));
+
+        Button clearChatButton = new Button("Clear Chat");
+        clearChatButton.getStyleClass().add("ghost-button");
+        clearChatButton.setTooltip(new Tooltip("Start a new conversation"));
+        clearChatButton.setOnAction(e -> resetChat());
+
+        HBox inputRow = new HBox(10, chatInputField, sendChatButton, clearChatButton);
+        inputRow.setAlignment(Pos.CENTER_LEFT);
+
+        resetChat();
+
+        VBox section = new VBox(14, topBar, apiSetupCard, suggestionChips, chatScroller, thinkingIndicator, inputRow);
+        section.getStyleClass().addAll("section", "chat-container");
+        UiEffects.apply3DTilt(section);
+        return section;
+    }
+
+    private VBox buildApiSetupCard() {
+        Label cardTitle = new Label("🔑 Gemini API Key Configuration");
+        cardTitle.getStyleClass().add("card-title");
+
+        Label cardDesc = new Label("The chatbot is powered by Google Gemini. Enter your free API key from Google AI Studio below, "
+                + "or configure 'gemini_api_key' in data/profile.properties. Once added, the chatbot activates instantly.");
+        cardDesc.getStyleClass().add("card-text");
+        cardDesc.setWrapText(true);
+
+        PasswordField keyInput = new PasswordField();
+        keyInput.setPromptText("Paste your Gemini API key (AIzaSy...)");
+        keyInput.getStyleClass().add("input");
+        keyInput.setText(profile.getGeminiApiKey());
+        HBox.setHgrow(keyInput, Priority.ALWAYS);
+
+        Button saveBtn = new Button("Save & Connect");
+        saveBtn.getStyleClass().add("primary-button");
+        saveBtn.setOnAction(e -> {
+            String key = keyInput.getText().trim();
+            profile.setGeminiApiKey(key);
+            updateChatApiStatus();
+            if (geminiService.isConfigured()) {
+                apiSetupCard.setVisible(false);
+                apiSetupCard.setManaged(false);
+                GeminiService.ChatMessage connectedMsg = new GeminiService.ChatMessage(
+                        GeminiService.ChatMessage.Sender.SYSTEM,
+                        "✨ Google Gemini connected successfully (" + geminiService.getModel() + ")! You can now ask questions."
+                );
+                chatHistory.add(connectedMsg);
+                renderChatMessage(connectedMsg);
+            } else {
+                info("API Key", "API key cleared.");
+            }
+        });
+
+        Hyperlink getLink = new Hyperlink("Get Free API Key (aistudio.google.com) ↗");
+        getLink.getStyleClass().add("card-link");
+        getLink.setOnAction(e -> openLink("https://aistudio.google.com"));
+
+        Button closeBtn = new Button("Hide");
+        closeBtn.getStyleClass().add("ghost-button");
+        closeBtn.setOnAction(e -> {
+            apiSetupCard.setVisible(false);
+            apiSetupCard.setManaged(false);
+        });
+
+        HBox inputRow = new HBox(10, keyInput, saveBtn, closeBtn);
+        inputRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox card = new VBox(10, cardTitle, cardDesc, inputRow, getLink);
+        card.getStyleClass().add("api-setup-card");
+        return card;
+    }
+
+    private void updateChatApiStatus() {
+        if (apiStatusBadge == null) return;
+        if (geminiService != null && geminiService.isConfigured()) {
+            apiStatusBadge.setText("● Gemini Ready (" + geminiService.getModel() + ")");
+            apiStatusBadge.getStyleClass().setAll("pill", "status-completed");
+        } else {
+            apiStatusBadge.setText("○ API Key Pending");
+            apiStatusBadge.getStyleClass().setAll("pill", "status-ongoing");
+        }
+    }
+
+    private Node buildSuggestionChips() {
+        FlowPane chips = new FlowPane(8, 8);
+        List<String> prompts = List.of(
+                "👋 Tell me about Debanjon Roy",
+                "💻 What are his top projects?",
+                "🔬 Explain his research work",
+                "📬 How can I contact or hire him?",
+                "☕ How do donations work?",
+                "🛠️ What technologies and languages does he use?"
+        );
+        for (String p : prompts) {
+            Button chip = new Button(p);
+            chip.getStyleClass().add("chat-chip");
+            chip.setOnAction(e -> handleSendChatMessage(p));
+            chips.getChildren().add(chip);
+        }
+        return chips;
+    }
+
+    private HBox buildThinkingIndicator() {
+        ProgressIndicator spinner = new ProgressIndicator();
+        spinner.setMaxSize(20, 20);
+
+        Label label = new Label("Gemini is thinking…");
+        label.getStyleClass().add("chat-thinking-label");
+
+        HBox box = new HBox(10, spinner, label);
+        box.setAlignment(Pos.CENTER_LEFT);
+        box.getStyleClass().add("chat-thinking");
+        return box;
+    }
+
+    private void resetChat() {
+        chatHistory.clear();
+        if (chatMessagesBox != null) {
+            chatMessagesBox.getChildren().clear();
+        }
+
+        GeminiService.ChatMessage welcome = new GeminiService.ChatMessage(
+                GeminiService.ChatMessage.Sender.BOT,
+                "Hello! I am Debanjon's AI assistant powered by Google Gemini.\n\n"
+                        + "If you're confused by any project, curious about his research publications, "
+                        + "or looking to collaborate, ask me anything!"
+        );
+        chatHistory.add(welcome);
+        renderChatMessage(welcome);
+    }
+
+    private void renderChatMessage(GeminiService.ChatMessage msg) {
+        if (chatMessagesBox == null) return;
+
+        if (msg.getSender() == GeminiService.ChatMessage.Sender.USER) {
+            Label header = new Label("You  ·  " + msg.getFormattedTime());
+            header.getStyleClass().add("chat-header-user");
+
+            Label text = new Label(msg.getText());
+            text.getStyleClass().add("chat-text");
+            text.setWrapText(true);
+            text.setMaxWidth(560);
+
+            VBox bubble = new VBox(4, header, text);
+            bubble.getStyleClass().add("chat-bubble-user");
+
+            HBox row = new HBox(bubble);
+            row.setAlignment(Pos.CENTER_RIGHT);
+            chatMessagesBox.getChildren().add(row);
+
+        } else if (msg.getSender() == GeminiService.ChatMessage.Sender.BOT) {
+            Label header = new Label("✨ Gemini AI  ·  " + msg.getFormattedTime());
+            header.getStyleClass().add("chat-header-bot");
+
+            Region spacer = new Region();
+            HBox.setHgrow(spacer, Priority.ALWAYS);
+
+            Button copyBtn = new Button("Copy");
+            copyBtn.getStyleClass().add("ghost-button");
+            copyBtn.setStyle("-fx-font-size: 10px; -fx-padding: 2 8 2 8;");
+            copyBtn.setOnAction(e -> {
+                Clipboard clipboard = Clipboard.getSystemClipboard();
+                ClipboardContent content = new ClipboardContent();
+                content.putString(msg.getText());
+                clipboard.setContent(content);
+                copyBtn.setText("Copied!");
+                Timeline timeline = new Timeline(new KeyFrame(Duration.millis(1500), evt -> copyBtn.setText("Copy")));
+                timeline.play();
+            });
+
+            HBox headerRow = new HBox(8, header, spacer, copyBtn);
+            headerRow.setAlignment(Pos.CENTER_LEFT);
+
+            Label text = new Label(msg.getText());
+            text.getStyleClass().add("chat-text");
+            text.setWrapText(true);
+            text.setMaxWidth(640);
+
+            VBox bubble = new VBox(6, headerRow, text);
+            bubble.getStyleClass().add("chat-bubble-bot");
+
+            HBox row = new HBox(bubble);
+            row.setAlignment(Pos.CENTER_LEFT);
+            chatMessagesBox.getChildren().add(row);
+
+        } else {
+            Label text = new Label(msg.getText());
+            text.getStyleClass().add("chat-text");
+            text.setWrapText(true);
+
+            VBox bubble = new VBox(text);
+            bubble.getStyleClass().add("chat-bubble-system");
+
+            HBox row = new HBox(bubble);
+            row.setAlignment(Pos.CENTER);
+            chatMessagesBox.getChildren().add(row);
+        }
+
+        if (chatScroller != null) {
+            Platform.runLater(() -> {
+                chatMessagesBox.applyCss();
+                chatMessagesBox.layout();
+                chatScroller.layout();
+                chatScroller.setVvalue(1.0);
+            });
+        }
+    }
+
+    private void handleSendChatMessage(String query) {
+        if (query == null || query.isBlank()) {
+            return;
+        }
+        String trimmed = query.trim();
+        if (chatInputField != null) {
+            chatInputField.clear();
+        }
+
+        GeminiService.ChatMessage userMsg = new GeminiService.ChatMessage(
+                GeminiService.ChatMessage.Sender.USER, trimmed);
+        chatHistory.add(userMsg);
+        renderChatMessage(userMsg);
+
+        if (!geminiService.isConfigured()) {
+            if (apiSetupCard != null) {
+                apiSetupCard.setVisible(true);
+                apiSetupCard.setManaged(true);
+            }
+
+            GeminiService.ChatMessage notConfiguredMsg = new GeminiService.ChatMessage(
+                    GeminiService.ChatMessage.Sender.BOT,
+                    "⚠️ Gemini API key is not configured yet.\n\n"
+                            + "Please enter your API key in the Setup box above, or add 'gemini_api_key=YOUR_KEY' "
+                            + "in data/profile.properties.\n\n"
+                            + "You can get a free API key at https://aistudio.google.com (no credit card required)."
+            );
+            chatHistory.add(notConfiguredMsg);
+            renderChatMessage(notConfiguredMsg);
+            return;
+        }
+
+        if (chatInputField != null) {
+            chatInputField.setDisable(true);
+        }
+        if (sendChatButton != null) {
+            sendChatButton.setDisable(true);
+        }
+        if (thinkingIndicator != null) {
+            thinkingIndicator.setVisible(true);
+            thinkingIndicator.setManaged(true);
+        }
+
+        if (chatScroller != null) {
+            Platform.runLater(() -> {
+                chatScroller.layout();
+                chatScroller.setVvalue(1.0);
+            });
+        }
+
+        runBackground(
+                () -> geminiService.ask(chatHistory, items),
+                reply -> {
+                    if (thinkingIndicator != null) {
+                        thinkingIndicator.setVisible(false);
+                        thinkingIndicator.setManaged(false);
+                    }
+                    if (chatInputField != null) {
+                        chatInputField.setDisable(false);
+                    }
+                    if (sendChatButton != null) {
+                        sendChatButton.setDisable(false);
+                    }
+
+                    GeminiService.ChatMessage botMsg = new GeminiService.ChatMessage(
+                            GeminiService.ChatMessage.Sender.BOT, reply);
+                    chatHistory.add(botMsg);
+                    renderChatMessage(botMsg);
+                    if (chatInputField != null) {
+                        chatInputField.requestFocus();
+                    }
+                },
+                error -> {
+                    if (thinkingIndicator != null) {
+                        thinkingIndicator.setVisible(false);
+                        thinkingIndicator.setManaged(false);
+                    }
+                    if (chatInputField != null) {
+                        chatInputField.setDisable(false);
+                    }
+                    if (sendChatButton != null) {
+                        sendChatButton.setDisable(false);
+                    }
+
+                    GeminiService.ChatMessage errorMsg = new GeminiService.ChatMessage(
+                            GeminiService.ChatMessage.Sender.BOT,
+                            "⚠️ Could not contact Gemini: " + describeError(error)
+                    );
+                    chatHistory.add(errorMsg);
+                    renderChatMessage(errorMsg);
+                    if (chatInputField != null) {
+                        chatInputField.requestFocus();
+                    }
+                }
+        );
     }
 
     // ------------------------------------------------------------ contact

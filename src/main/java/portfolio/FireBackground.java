@@ -24,10 +24,10 @@ import java.util.Random;
 public class FireBackground extends Pane {
 
     private static final Random RNG = new Random();
-    private static final int FLAME_PARTICLE_COUNT = 140;
-    private static final int EMBER_PARTICLE_COUNT = 75;
+    private static final int FLAME_PARTICLE_COUNT = 50;
+    private static final int EMBER_PARTICLE_COUNT = 25;
 
-    private int targetFps = 28; // Decreased frame rate for softer, cinematic fire
+    private int targetFps = 100; // Decreased frame rate for softer, cinematic fire
     private long frameIntervalNanos = 1_000_000_000L / targetFps;
 
     private final Canvas canvas = new Canvas();

@@ -33,6 +33,9 @@ public class Profile {
     // SHA-256 of "admin123". Change the password by editing password_hash in
     // data/profile.properties, not here.
     private String passwordHash = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9";
+    // Free key from https://aistudio.google.com — see GeminiService.java.
+    private String geminiApiKey = "";
+    private String geminiModel = "gemini-2.5-flash";
 
     /** Reads data/profile.properties, creating it with placeholders on first run. */
     public void load() {
@@ -54,12 +57,14 @@ public class Profile {
             email = props.getProperty("email", email);
             whatsapp = props.getProperty("whatsapp", whatsapp);
             passwordHash = props.getProperty("password_hash", passwordHash);
+            geminiApiKey = props.getProperty("gemini_api_key", geminiApiKey);
+            geminiModel = props.getProperty("gemini_model", geminiModel);
         } catch (IOException e) {
             System.err.println("Could not read data/profile.properties, using defaults: " + e.getMessage());
         }
     }
 
-    private void writeDefaults() throws IOException {
+    public void save() throws IOException {
         String content = "# Your personal details for the portfolio app.\n"
                 + "# Edit the value after each '=' below, save this file, then restart the app.\n"
                 + "# This file lives outside the Java source, so future code updates never touch it.\n"
@@ -78,8 +83,18 @@ public class Profile {
                 + "# Owner login password, stored as a SHA-256 hash rather than plain text.\n"
                 + "# To set your own: run  java src/main/java/portfolio/Auth.java \"your password\"\n"
                 + "# then paste the printed hash below.\n"
-                + "password_hash=" + passwordHash + "\n";
+                + "password_hash=" + passwordHash + "\n"
+                + "\n"
+                + "# Powers the \"Ask a Question\" chatbot (Google Gemini). Free to get: create a\n"
+                + "# key at https://aistudio.google.com (no credit card needed) and paste it below.\n"
+                + "# Leave blank to keep that section showing a \"not set up yet\" message instead.\n"
+                + "gemini_api_key=" + geminiApiKey + "\n"
+                + "gemini_model=" + geminiModel + "\n";
         Files.writeString(FILE, content);
+    }
+
+    private void writeDefaults() throws IOException {
+        save();
     }
 
     public String getName() {
@@ -112,5 +127,42 @@ public class Profile {
 
     public String getPasswordHash() {
         return passwordHash;
+    }
+
+    public String getGeminiApiKey() {
+        return geminiApiKey;
+    }
+
+    public String getEffectiveGeminiApiKey() {
+        if (geminiApiKey != null && !geminiApiKey.isBlank()) {
+            return geminiApiKey.trim();
+        }
+        String envKey = System.getenv("GEMINI_API_KEY");
+        if (envKey != null && !envKey.isBlank()) {
+            return envKey.trim();
+        }
+        return "";
+    }
+
+    public synchronized void setGeminiApiKey(String apiKey) {
+        this.geminiApiKey = apiKey == null ? "" : apiKey.trim();
+        try {
+            save();
+        } catch (IOException e) {
+            System.err.println("Could not save Gemini API key: " + e.getMessage());
+        }
+    }
+
+    public String getGeminiModel() {
+        return geminiModel;
+    }
+
+    public synchronized void setGeminiModel(String model) {
+        this.geminiModel = (model == null || model.isBlank()) ? "gemini-2.5-flash" : model.trim();
+        try {
+            save();
+        } catch (IOException e) {
+            System.err.println("Could not save Gemini model: " + e.getMessage());
+        }
     }
 }
