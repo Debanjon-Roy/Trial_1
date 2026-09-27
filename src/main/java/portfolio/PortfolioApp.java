@@ -114,9 +114,7 @@ public class PortfolioApp extends Application {
     private VBox commentsBox;
     private Item currentDetailItem;
     private long lastParticleTime = 0;
-    private TechOrb3D techOrb;
-    private TechCoin3D techCoin;
-    private AnimationTimer ambientTimer;
+    private FireBackground fireBackground;
 
     @Override
     public void start(Stage stage) {
@@ -159,14 +157,10 @@ public class PortfolioApp extends Application {
         detailScroller.setVisible(false);
         detailScroller.setManaged(false);
 
-        Pane ambientLayer = new Pane();
-        ambientLayer.setMouseTransparent(true);
-        ambientLayer.setPickOnBounds(false);
-        ambientTimer = UiEffects.startAmbientParticles(ambientLayer, 32);
-
-        StackPane centerStack = new StackPane(ambientLayer, mainScroller, detailScroller);
-        ambientLayer.prefWidthProperty().bind(centerStack.widthProperty());
-        ambientLayer.prefHeightProperty().bind(centerStack.heightProperty());
+        fireBackground = new FireBackground();
+        StackPane centerStack = new StackPane(fireBackground, mainScroller, detailScroller);
+        fireBackground.prefWidthProperty().bind(centerStack.widthProperty());
+        fireBackground.prefHeightProperty().bind(centerStack.heightProperty());
 
         BorderPane root = new BorderPane();
         root.getStyleClass().add("root-pane");
@@ -209,14 +203,8 @@ public class PortfolioApp extends Application {
 
     @Override
     public void stop() {
-        if (techOrb != null) {
-            techOrb.stopAnimation();
-        }
-        if (techCoin != null) {
-            techCoin.stopAnimation();
-        }
-        if (ambientTimer != null) {
-            ambientTimer.stop();
+        if (fireBackground != null) {
+            fireBackground.stopAnimation();
         }
         Concurrency.shutdown();
     }
@@ -394,9 +382,7 @@ public class PortfolioApp extends Application {
         text.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(text, Priority.ALWAYS);
 
-        techOrb = new TechOrb3D(175, 175);
-
-        HBox hero = new HBox(26, photo, text, techOrb);
+        HBox hero = new HBox(26, photo, text);
         hero.setAlignment(Pos.CENTER_LEFT);
         hero.getStyleClass().addAll("section", "hero");
         UiEffects.apply3DTilt(hero);
@@ -649,18 +635,11 @@ public class PortfolioApp extends Application {
         amount.setPrefWidth(160);
         amount.getStyleClass().add("input");
 
-        techCoin = new TechCoin3D(110, 110);
-
         HBox presets = new HBox(8);
         for (int value : new int[]{100, 500, 1000, 2000}) {
             Button preset = new Button("৳" + value);
             preset.getStyleClass().add("ghost-button");
-            preset.setOnAction(e -> {
-                amount.setText(String.valueOf(value));
-                if (techCoin != null) {
-                    techCoin.spinPulse();
-                }
-            });
+            preset.setOnAction(e -> amount.setText(String.valueOf(value)));
             presets.getChildren().add(preset);
         }
 
@@ -671,23 +650,12 @@ public class PortfolioApp extends Application {
 
         Button donate = new Button("Donate with bKash");
         donate.getStyleClass().add("primary-button");
-        donate.setOnAction(e -> {
-            if (techCoin != null) {
-                techCoin.spinPulse();
-            }
-            handleDonate(amount.getText(), donorName.getText());
-        });
+        donate.setOnAction(e -> handleDonate(amount.getText(), donorName.getText()));
 
         HBox row = new HBox(10, amount, donorName, donate);
         row.setAlignment(Pos.CENTER_LEFT);
 
-        VBox inputsCol = new VBox(12, blurb, presets, row);
-        HBox.setHgrow(inputsCol, Priority.ALWAYS);
-
-        HBox donateContent = new HBox(22, inputsCol, techCoin);
-        donateContent.setAlignment(Pos.CENTER_LEFT);
-
-        VBox section = new VBox(14, sectionTitle("Donate"), donateContent);
+        VBox section = new VBox(14, sectionTitle("Donate"), blurb, presets, row);
         section.getStyleClass().add("section");
         UiEffects.apply3DTilt(section);
         return section;
