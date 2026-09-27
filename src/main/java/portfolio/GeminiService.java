@@ -80,7 +80,7 @@ public class GeminiService {
 
     public String getModel() {
         String model = profile.getGeminiModel();
-        return (model != null && !model.isBlank()) ? model.trim() : "gemini-3.8-flash";
+        return (model != null && !model.isBlank()) ? model.trim() : "gemini-3.5-flash-lite";
     }
 
     /**

@@ -39,3 +39,6 @@ build/
 .DS_Store
 
 data/profile.properties
+data/secrets.properties
+data/*.secrets
+*.secrets

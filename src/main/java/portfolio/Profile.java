@@ -20,6 +20,7 @@ import java.util.Properties;
 public class Profile {
 
     private static final Path FILE = Paths.get("data", "profile.properties");
+    private static final Path SECRETS_FILE = Paths.get("data", "secrets.properties");
 
     private String name = "Your Name";
     private String tagline = "Computer Science Undergraduate · Developer · Researcher";
@@ -34,10 +35,11 @@ public class Profile {
     // data/profile.properties, not here.
     private String passwordHash = "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9";
     // Free key from https://aistudio.google.com — see GeminiService.java.
+    // Stored in data/secrets.properties (git-ignored) so it is never committed.
     private String geminiApiKey = "";
-    private String geminiModel = "gemini-2.5-flash";
+    private String geminiModel = "gemini-3.5-flash-lite";
 
-    /** Reads data/profile.properties, creating it with placeholders on first run. */
+    /** Reads data/profile.properties and data/secrets.properties. */
     public void load() {
         try {
             Files.createDirectories(FILE.getParent());
@@ -57,8 +59,26 @@ public class Profile {
             email = props.getProperty("email", email);
             whatsapp = props.getProperty("whatsapp", whatsapp);
             passwordHash = props.getProperty("password_hash", passwordHash);
-            geminiApiKey = props.getProperty("gemini_api_key", geminiApiKey);
+            String legacyApiKey = props.getProperty("gemini_api_key", "");
             geminiModel = props.getProperty("gemini_model", geminiModel);
+
+            // Read secrets from git-ignored secrets.properties first
+            if (Files.exists(SECRETS_FILE)) {
+                Properties secrets = new Properties();
+                try (InputStream sin = Files.newInputStream(SECRETS_FILE)) {
+                    secrets.load(sin);
+                    geminiApiKey = secrets.getProperty("gemini_api_key", geminiApiKey);
+                } catch (IOException e) {
+                    System.err.println("Could not read " + SECRETS_FILE + ": " + e.getMessage());
+                }
+            }
+
+            // If key was previously in profile.properties, migrate it to secrets.properties and clean profile.properties
+            if ((geminiApiKey == null || geminiApiKey.isBlank()) && legacyApiKey != null && !legacyApiKey.isBlank()) {
+                geminiApiKey = legacyApiKey.trim();
+                saveSecrets();
+                save(); // re-save profile.properties without the raw key
+            }
         } catch (IOException e) {
             System.err.println("Could not read data/profile.properties, using defaults: " + e.getMessage());
         }
@@ -86,9 +106,9 @@ public class Profile {
                 + "password_hash=" + passwordHash + "\n"
                 + "\n"
                 + "# Powers the \"Ask a Question\" chatbot (Google Gemini). Free to get: create a\n"
-                + "# key at https://aistudio.google.com (no credit card needed) and paste it below.\n"
-                + "# Leave blank to keep that section showing a \"not set up yet\" message instead.\n"
-                + "gemini_api_key=" + geminiApiKey + "\n"
+                + "# key at https://aistudio.google.com (no credit card needed).\n"
+                + "# The API key is stored safely in git-ignored data/secrets.properties.\n"
+                + "gemini_api_key=\n"
                 + "gemini_model=" + geminiModel + "\n";
         Files.writeString(FILE, content);
     }
@@ -146,10 +166,18 @@ public class Profile {
 
     public synchronized void setGeminiApiKey(String apiKey) {
         this.geminiApiKey = apiKey == null ? "" : apiKey.trim();
+        saveSecrets();
+    }
+
+    public synchronized void saveSecrets() {
         try {
-            save();
+            Files.createDirectories(SECRETS_FILE.getParent());
+            String content = "# Secrets and API keys for the portfolio app.\n"
+                    + "# THIS FILE IS GIT-IGNORED. DO NOT COMMIT IT TO VERSION CONTROL.\n"
+                    + "gemini_api_key=" + (geminiApiKey == null ? "" : geminiApiKey) + "\n";
+            Files.writeString(SECRETS_FILE, content);
         } catch (IOException e) {
-            System.err.println("Could not save Gemini API key: " + e.getMessage());
+            System.err.println("Could not save secrets to " + SECRETS_FILE + ": " + e.getMessage());
         }
     }
 
