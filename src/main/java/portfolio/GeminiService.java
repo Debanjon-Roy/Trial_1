@@ -278,7 +278,7 @@ public class GeminiService {
         sb.append("2. Projects: Software applications, tools, and systems built by ").append(profile.getName()).append(".\n");
         sb.append("3. Research Work: Academic research publications, ongoing studies, and findings.\n");
         sb.append("4. Achievements: Competitions, awards, and milestones.\n");
-        sb.append("5. Donate: Allows visitors to support ").append(profile.getName()).append(" via bKash.\n");
+        sb.append("5. Donate: Allows visitors to test dummy transactions and donations via the live bKash Sandbox payment gateway (Test wallet: 01770618575, OTP: 123456, PIN: 12121).\n");
         sb.append("6. Ask AI: This interactive chatbot powered by Google Gemini.\n");
         sb.append("7. Contact: Direct contact options (GitHub, LinkedIn, Email, WhatsApp).\n");
         sb.append("8. Comments: Public discussion where visitors can leave feedback on the portfolio or specific items.\n\n");

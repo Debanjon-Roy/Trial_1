@@ -49,10 +49,12 @@ public class Store {
     public static final class LoadResult {
         public final List<Item> items;
         public final List<Comment> comments;
+        public final List<Donation> donations;
 
-        LoadResult(List<Item> items, List<Comment> comments) {
+        LoadResult(List<Item> items, List<Comment> comments, List<Donation> donations) {
             this.items = items;
             this.comments = comments;
+            this.donations = donations;
         }
     }
 
@@ -160,6 +162,49 @@ public class Store {
         }
     }
 
+    public void insertDonation(Donation donation) {
+        String sql = "INSERT INTO donations(payment_id, trx_id, amount, currency, donor_name, customer_msisdn, status, created_at) "
+                + "VALUES (?,?,?,?,?,?,?,?)";
+        try (Connection c = connect();
+             PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            ps.setString(1, donation.getPaymentId());
+            ps.setString(2, donation.getTrxId());
+            ps.setDouble(3, donation.getAmount());
+            ps.setString(4, donation.getCurrency());
+            ps.setString(5, donation.getDonorName());
+            ps.setString(6, donation.getCustomerMsisdn());
+            ps.setString(7, donation.getStatus());
+            ps.setString(8, donation.getCreatedAt().toString());
+            ps.executeUpdate();
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                if (keys.next()) {
+                    donation.setId(keys.getInt(1));
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException("Could not save the donation", e);
+        }
+    }
+
+    public void updateDonation(Donation donation) {
+        String sql = "UPDATE donations SET payment_id=?, trx_id=?, amount=?, currency=?, donor_name=?, customer_msisdn=?, status=?, created_at=? WHERE id=?";
+        try (Connection c = connect();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, donation.getPaymentId());
+            ps.setString(2, donation.getTrxId());
+            ps.setDouble(3, donation.getAmount());
+            ps.setString(4, donation.getCurrency());
+            ps.setString(5, donation.getDonorName());
+            ps.setString(6, donation.getCustomerMsisdn());
+            ps.setString(7, donation.getStatus());
+            ps.setString(8, donation.getCreatedAt().toString());
+            ps.setInt(9, donation.getId());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException("Could not update the donation", e);
+        }
+    }
+
     // ------------------------------------------------------------------ setup
 
     private Connection connect() throws SQLException {
@@ -183,6 +228,16 @@ public class Store {
                     + "author TEXT,"
                     + "text TEXT,"
                     + "posted_at TEXT)");
+            st.execute("CREATE TABLE IF NOT EXISTS donations ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                    + "payment_id TEXT,"
+                    + "trx_id TEXT,"
+                    + "amount REAL,"
+                    + "currency TEXT,"
+                    + "donor_name TEXT,"
+                    + "customer_msisdn TEXT,"
+                    + "status TEXT,"
+                    + "created_at TEXT)");
         }
         // Covers databases created by an earlier version of this schema (e.g. before
         // attachments existed): add any column that CREATE TABLE IF NOT EXISTS would
@@ -251,7 +306,31 @@ public class Store {
                 commentList.add(comment);
             }
         }
-        return new LoadResult(itemList, commentList);
+        List<Donation> donationList = new ArrayList<>();
+        try (Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("SELECT * FROM donations ORDER BY id DESC")) {
+            while (rs.next()) {
+                LocalDateTime when;
+                try {
+                    when = LocalDateTime.parse(rs.getString("created_at"));
+                } catch (Exception e) {
+                    when = LocalDateTime.now();
+                }
+                Donation donation = new Donation(
+                        rs.getInt("id"),
+                        rs.getString("payment_id"),
+                        rs.getString("trx_id"),
+                        rs.getDouble("amount"),
+                        rs.getString("currency"),
+                        rs.getString("donor_name"),
+                        rs.getString("customer_msisdn"),
+                        rs.getString("status"),
+                        when
+                );
+                donationList.add(donation);
+            }
+        }
+        return new LoadResult(itemList, commentList, donationList);
     }
 
     // ---------------------------------------------------- one-time migration

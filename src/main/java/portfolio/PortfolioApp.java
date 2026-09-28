@@ -69,6 +69,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
@@ -102,6 +103,7 @@ public class PortfolioApp extends Application {
     private GeminiService geminiService;
     private final ObservableList<Item> items = FXCollections.observableArrayList();
     private final ObservableList<Comment> comments = FXCollections.observableArrayList();
+    private final ObservableList<Donation> donations = FXCollections.observableArrayList();
     private final BooleanProperty ownerMode = new SimpleBooleanProperty(false);
     private final StringProperty searchQuery = new SimpleStringProperty("");
     private final Map<String, Node> sectionAnchors = new LinkedHashMap<>();
@@ -127,6 +129,7 @@ public class PortfolioApp extends Application {
     private VBox researchBox;
     private VBox achievementsBox;
     private VBox commentsBox;
+    private VBox donationsBox;
     private Item currentDetailItem;
     private long lastParticleTime = 0;
     private FireBackground fireBackground;
@@ -234,6 +237,7 @@ public class PortfolioApp extends Application {
         if (detailBackground != null) {
             detailBackground.stopAnimation();
         }
+        bkash.stopCallbackServer();
         Concurrency.shutdown();
     }
 
@@ -243,7 +247,9 @@ public class PortfolioApp extends Application {
         runBackground(store::load, result -> {
             items.setAll(result.items);
             comments.setAll(result.comments);
+            donations.setAll(result.donations);
             refreshLists();
+            refreshDonationsList();
             hideLoadingOverlay();
         });
     }
@@ -775,18 +781,20 @@ public class PortfolioApp extends Application {
 
     private Node buildDonate() {
         Label blurb = new Label(
-                "If my work has been useful to you, a small contribution helps me keep "
-                        + "buying compute time and conference fees. Payments are handled by bKash.");
+                "Experience live bKash Sandbox payment gateway integration for testing and learning. "
+                        + "You can simulate end-to-end transactions using official bKash sandbox test accounts without real money.");
         blurb.getStyleClass().add("card-text");
         blurb.setWrapText(true);
 
+        VBox testCredentialsCard = buildTestCredentialsCard();
+
         TextField amount = new TextField();
-        amount.setPromptText("Amount in BDT");
+        amount.setPromptText("Amount in BDT (e.g. 100)");
         amount.setPrefWidth(160);
         amount.getStyleClass().add("input");
 
         HBox presets = new HBox(8);
-        for (int value : new int[]{100, 500, 1000, 2000}) {
+        for (int value : new int[]{50, 100, 500, 1000, 2000}) {
             Button preset = new Button("৳" + value);
             preset.getStyleClass().add("ghost-button");
             preset.setOnAction(e -> amount.setText(String.valueOf(value)));
@@ -794,40 +802,369 @@ public class PortfolioApp extends Application {
         }
 
         TextField donorName = new TextField();
-        donorName.setPromptText("Your name (optional)");
+        donorName.setPromptText("Your name / reference (optional)");
         donorName.setPrefWidth(220);
         donorName.getStyleClass().add("input");
 
-        Button donate = new Button("Donate with bKash");
+        Button donate = new Button("Donate with bKash (Sandbox)");
         donate.getStyleClass().add("primary-button");
+        donate.setStyle("-fx-background-color: linear-gradient(to bottom, #E2136E, #C20C5C); -fx-text-fill: white; -fx-font-weight: bold;");
         donate.setOnAction(e -> handleDonate(amount.getText(), donorName.getText()));
 
-        HBox row = new HBox(10, amount, donorName, donate);
-        row.setAlignment(Pos.CENTER_LEFT);
+        HBox inputRow = new HBox(10, amount, donorName, donate);
+        inputRow.setAlignment(Pos.CENTER_LEFT);
 
-        VBox section = new VBox(14, sectionTitle("Donate"), blurb, presets, row);
+        Label historyTitle = new Label("Recent Sandbox Transactions");
+        historyTitle.setStyle("-fx-text-fill: #FFE082; -fx-font-weight: bold; -fx-font-size: 15px;");
+
+        donationsBox = new VBox(8);
+        refreshDonationsList();
+
+        VBox historySection = new VBox(10, historyTitle, donationsBox);
+        historySection.setPadding(new Insets(10, 0, 0, 0));
+
+        VBox section = new VBox(14, sectionTitle("Donate & Support"), blurb, testCredentialsCard, presets, inputRow, historySection);
         section.getStyleClass().add("section");
         UiEffects.apply3DTilt(section);
         return section;
+    }
+
+    private VBox buildTestCredentialsCard() {
+        Label cardTitle = new Label("bKash Sandbox Test Credentials");
+        cardTitle.setStyle("-fx-text-fill: #E2136E; -fx-font-weight: bold; -fx-font-size: 13px;");
+
+        HBox walletRow = createCopyableCredentialRow("Test Wallet:", BkashService.TEST_WALLET);
+        HBox otpRow = createCopyableCredentialRow("OTP:", BkashService.TEST_OTP);
+        HBox pinRow = createCopyableCredentialRow("PIN:", BkashService.TEST_PIN);
+
+        HBox credsRow = new HBox(20, walletRow, otpRow, pinRow);
+        credsRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label hint = new Label("Click Copy on any credential, or enter them when the bKash payment window opens in your browser.");
+        hint.setStyle("-fx-text-fill: rgba(255, 255, 255, 0.7); -fx-font-size: 11.5px; -fx-font-style: italic;");
+
+        VBox card = new VBox(8, cardTitle, credsRow, hint);
+        card.setStyle("-fx-background-color: rgba(30, 2, 8, 0.55); -fx-border-color: rgba(226, 19, 110, 0.5); "
+                + "-fx-border-radius: 10; -fx-background-radius: 10; -fx-padding: 12 16 12 16;");
+        return card;
+    }
+
+    private HBox createCopyableCredentialRow(String labelText, String valueText) {
+        Label label = new Label(labelText);
+        label.setStyle("-fx-text-fill: rgba(255, 255, 255, 0.85); -fx-font-size: 12px;");
+
+        Label val = new Label(valueText);
+        val.setStyle("-fx-text-fill: #FFD54F; -fx-font-family: monospace; -fx-font-weight: bold; -fx-font-size: 13px;");
+
+        Button copy = new Button("Copy");
+        copy.getStyleClass().add("ghost-button");
+        copy.setStyle("-fx-font-size: 10px; -fx-padding: 2 8 2 8;");
+        copy.setOnAction(e -> {
+            Clipboard clipboard = Clipboard.getSystemClipboard();
+            ClipboardContent content = new ClipboardContent();
+            content.putString(valueText);
+            clipboard.setContent(content);
+            copy.setText("Copied!");
+            Timeline t = new Timeline(new KeyFrame(Duration.seconds(1.5), evt -> copy.setText("Copy")));
+            t.play();
+        });
+
+        HBox row = new HBox(6, label, val, copy);
+        row.setAlignment(Pos.CENTER_LEFT);
+        return row;
+    }
+
+    private void refreshDonationsList() {
+        if (donationsBox == null) return;
+        donationsBox.getChildren().clear();
+
+        if (donations.isEmpty()) {
+            Label empty = new Label("No test transactions yet. Try submitting a dummy payment above!");
+            empty.setStyle("-fx-text-fill: rgba(255, 255, 255, 0.6); -fx-font-size: 12.5px; -fx-font-style: italic;");
+            donationsBox.getChildren().add(empty);
+            return;
+        }
+
+        for (Donation d : donations) {
+            donationsBox.getChildren().add(buildDonationCard(d));
+        }
+    }
+
+    private Node buildDonationCard(Donation d) {
+        HBox card = new HBox(12);
+        card.setAlignment(Pos.CENTER_LEFT);
+        card.setPadding(new Insets(10, 14, 10, 14));
+        card.setStyle("-fx-background-color: rgba(255, 255, 255, 0.07); -fx-background-radius: 8; -fx-border-color: rgba(255, 255, 255, 0.15); -fx-border-radius: 8;");
+
+        Label amountLabel = new Label("৳ " + String.format(Locale.US, "%.2f", d.getAmount()));
+        amountLabel.setStyle("-fx-text-fill: #E2136E; -fx-font-size: 14px; -fx-font-weight: bold;");
+        amountLabel.setPrefWidth(90);
+
+        VBox details = new VBox(3);
+        Label donor = new Label(d.getDonorName() + (d.getCustomerMsisdn() != null && !d.getCustomerMsisdn().isBlank() ? " (" + d.getCustomerMsisdn() + ")" : ""));
+        donor.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 12.5px;");
+
+        String subInfo = "TrxID: " + (d.getTrxId() != null && !d.getTrxId().isBlank() ? d.getTrxId() : d.getPaymentId())
+                + " • " + d.getFormattedDate();
+        Label meta = new Label(subInfo);
+        meta.setStyle("-fx-text-fill: rgba(255, 255, 255, 0.65); -fx-font-size: 11px;");
+        details.getChildren().addAll(donor, meta);
+
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        boolean isCompleted = "Completed".equalsIgnoreCase(d.getStatus());
+        Label statusBadge = new Label(d.getStatus());
+        statusBadge.setStyle(isCompleted
+                ? "-fx-background-color: rgba(46, 125, 50, 0.3); -fx-text-fill: #81C784; -fx-font-weight: bold; -fx-font-size: 11px; -fx-padding: 3 8 3 8; -fx-background-radius: 6;"
+                : "-fx-background-color: rgba(239, 108, 0, 0.3); -fx-text-fill: #FFB74D; -fx-font-weight: bold; -fx-font-size: 11px; -fx-padding: 3 8 3 8; -fx-background-radius: 6;");
+
+        Button verifyBtn = new Button("Query");
+        verifyBtn.getStyleClass().add("ghost-button");
+        verifyBtn.setStyle("-fx-font-size: 10px; -fx-padding: 2 8 2 8;");
+        verifyBtn.setTooltip(new Tooltip("Query real-time status from bKash server"));
+        verifyBtn.setOnAction(e -> {
+            verifyBtn.setDisable(true);
+            runBackground(() -> bkash.queryPayment(d.getPaymentId()), res -> {
+                verifyBtn.setDisable(false);
+                if (res.success) {
+                    info("bKash Query Result", "Payment ID: " + d.getPaymentId() + "\nStatus: " + res.transactionStatus
+                            + (res.trxId != null ? "\nTrxID: " + res.trxId : "")
+                            + "\nAmount: " + res.amount + " BDT\nVerification: " + res.verificationStatus);
+                    if (res.trxId != null && (d.getTrxId() == null || d.getTrxId().isBlank())) {
+                        d.setTrxId(res.trxId);
+                        d.setStatus(res.transactionStatus);
+                        runBackground(() -> store.updateDonation(d), () -> refreshDonationsList());
+                    }
+                } else {
+                    info("bKash Query", res.message);
+                }
+            });
+        });
+
+        card.getChildren().addAll(amountLabel, details, spacer, statusBadge, verifyBtn);
+        return card;
     }
 
     private void handleDonate(String rawAmount, String donorName) {
         double amount;
         try {
             amount = Double.parseDouble(rawAmount.trim());
+            if (amount <= 0) {
+                info("Invalid amount", "Please enter an amount greater than zero.");
+                return;
+            }
         } catch (NumberFormatException e) {
             info("Invalid amount", "Please type a number, for example 500.");
             return;
         }
 
-        String reference = donorName == null || donorName.isBlank() ? "Anonymous" : donorName.trim();
-        BkashService.PaymentResult result = bkash.startPayment(amount, reference);
+        String reference = (donorName == null || donorName.isBlank()) ? "Anonymous" : donorName.trim();
+        showBkashCheckoutDialog(amount, reference);
+    }
 
-        if (result.success && result.paymentUrl != null) {
-            openLink(result.paymentUrl);
-        } else {
-            info("bKash", result.message);
+    private void showBkashCheckoutDialog(double amount, String reference) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle("bKash Sandbox Payment");
+        dialog.initOwner(stage);
+
+        VBox content = new VBox(16);
+        content.setPrefWidth(480);
+        content.setPadding(new Insets(20));
+        content.setStyle("-fx-background-color: #1A0407; -fx-background-radius: 12;");
+
+        // Header
+        HBox header = new HBox(12);
+        header.setAlignment(Pos.CENTER_LEFT);
+        Label bkashBadge = new Label("bKash");
+        bkashBadge.setStyle("-fx-background-color: #E2136E; -fx-text-fill: white; -fx-font-weight: 900; -fx-padding: 4 12 4 12; -fx-background-radius: 6; -fx-font-size: 14px;");
+        Label sandboxTag = new Label("SANDBOX GATEWAY");
+        sandboxTag.setStyle("-fx-text-fill: #FFD54F; -fx-font-weight: bold; -fx-font-size: 11px;");
+        Region headerSpacer = new Region();
+        HBox.setHgrow(headerSpacer, Priority.ALWAYS);
+        Label amountBadge = new Label("৳ " + String.format(Locale.US, "%.2f", amount) + " BDT");
+        amountBadge.setStyle("-fx-text-fill: white; -fx-font-size: 16px; -fx-font-weight: bold;");
+        header.getChildren().addAll(bkashBadge, sandboxTag, headerSpacer, amountBadge);
+
+        Label refLabel = new Label("Donor: " + reference);
+        refLabel.setStyle("-fx-text-fill: rgba(255, 255, 255, 0.75); -fx-font-size: 12px;");
+
+        // Status Box
+        HBox statusBox = new HBox(12);
+        statusBox.setAlignment(Pos.CENTER_LEFT);
+        ProgressIndicator spinner = new ProgressIndicator();
+        spinner.setMaxSize(24, 24);
+        Label statusLabel = new Label("Connecting to bKash Sandbox API...");
+        statusLabel.setStyle("-fx-text-fill: white; -fx-font-size: 13px;");
+        statusLabel.setWrapText(true);
+        statusBox.getChildren().addAll(spinner, statusLabel);
+
+        VBox credsBox = buildTestCredentialsCard();
+
+        Button openBrowserBtn = new Button("Open Checkout in Browser");
+        openBrowserBtn.getStyleClass().add("primary-button");
+        openBrowserBtn.setStyle("-fx-background-color: #E2136E; -fx-text-fill: white; -fx-font-weight: bold;");
+        openBrowserBtn.setDisable(true);
+
+        Button manualVerifyBtn = new Button("Verify & Execute");
+        manualVerifyBtn.getStyleClass().add("ghost-button");
+        manualVerifyBtn.setDisable(true);
+
+        Button cancelBtn = new Button("Cancel");
+        cancelBtn.getStyleClass().add("danger-button");
+
+        HBox actionsRow = new HBox(10, openBrowserBtn, manualVerifyBtn, cancelBtn);
+        actionsRow.setAlignment(Pos.CENTER_RIGHT);
+
+        content.getChildren().addAll(header, refLabel, credsBox, statusBox, actionsRow);
+
+        dialog.getDialogPane().setContent(content);
+        dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+        Node closeBtnNode = dialog.getDialogPane().lookupButton(ButtonType.CLOSE);
+        if (closeBtnNode != null) {
+            closeBtnNode.setVisible(false);
+            closeBtnNode.setManaged(false);
         }
+
+        cancelBtn.setOnAction(e -> dialog.close());
+
+        final Donation[] currentDonation = new Donation[1];
+        final String[] activePaymentId = new String[1];
+        final String[] checkoutUrl = new String[1];
+
+        Runnable onPaymentSuccess = () -> {
+            Platform.runLater(() -> {
+                spinner.setVisible(false);
+                statusLabel.setText("Payment Successful! TrxID: " + currentDonation[0].getTrxId());
+                statusLabel.setStyle("-fx-text-fill: #81C784; -fx-font-weight: bold; -fx-font-size: 14px;");
+                openBrowserBtn.setDisable(true);
+                manualVerifyBtn.setDisable(true);
+                cancelBtn.setText("Done");
+                cancelBtn.getStyleClass().clear();
+                cancelBtn.getStyleClass().add("primary-button");
+                cancelBtn.setStyle("-fx-background-color: #2E7D32; -fx-text-fill: white;");
+                refreshDonationsList();
+            });
+        };
+
+        runBackground(() -> bkash.createPayment(amount, reference), initResult -> {
+            if (!initResult.success) {
+                spinner.setVisible(false);
+                statusLabel.setText("Failed: " + initResult.message);
+                statusLabel.setStyle("-fx-text-fill: #EF5350;");
+                return;
+            }
+
+            activePaymentId[0] = initResult.paymentId;
+            checkoutUrl[0] = initResult.paymentUrl;
+
+            Donation donation = new Donation(
+                    initResult.paymentId,
+                    "",
+                    amount,
+                    "BDT",
+                    reference,
+                    "",
+                    "Initiated",
+                    LocalDateTime.now()
+            );
+            currentDonation[0] = donation;
+
+            runBackground(() -> store.insertDonation(donation), () -> {
+                donations.add(0, donation);
+                refreshDonationsList();
+            });
+
+            statusLabel.setText("Checkout opened in browser! Enter test credentials to pay.");
+            openBrowserBtn.setDisable(false);
+            manualVerifyBtn.setDisable(false);
+
+            openBrowserBtn.setOnAction(e -> {
+                if (checkoutUrl[0] != null) {
+                    openLink(checkoutUrl[0]);
+                }
+            });
+
+            // Auto-poll for payment completion every 3 seconds
+            final boolean[] polling = {true};
+            final boolean[] executionStarted = {false};
+
+            Thread pollThread = new Thread(() -> {
+                try { Thread.sleep(5000); } catch (InterruptedException ignored) { return; }
+                while (polling[0]) {
+                    try {
+                        // Try to execute the payment — this works once the user has authorized in the browser
+                        BkashService.PaymentExecuteResult execRes = bkash.executePayment(activePaymentId[0]);
+                        if (execRes.success && !executionStarted[0]) {
+                            executionStarted[0] = true;
+                            polling[0] = false;
+                            Platform.runLater(() -> {
+                                donation.setTrxId(execRes.trxId);
+                                donation.setCustomerMsisdn(execRes.customerMsisdn);
+                                donation.setStatus("Completed");
+                                runBackground(() -> store.updateDonation(donation), () -> onPaymentSuccess.run());
+                            });
+                            return;
+                        }
+
+                        // Also check query status
+                        BkashService.PaymentStatusResult queryRes = bkash.queryPayment(activePaymentId[0]);
+                        if (queryRes.success && "Completed".equalsIgnoreCase(queryRes.transactionStatus)) {
+                            polling[0] = false;
+                            Platform.runLater(() -> {
+                                donation.setTrxId(queryRes.trxId);
+                                donation.setStatus("Completed");
+                                runBackground(() -> store.updateDonation(donation), () -> onPaymentSuccess.run());
+                            });
+                            return;
+                        }
+
+                        Thread.sleep(3000);
+                    } catch (InterruptedException ignored) {
+                        return;
+                    } catch (Exception ignored) {
+                        try { Thread.sleep(3000); } catch (InterruptedException ie) { return; }
+                    }
+                }
+            });
+            pollThread.setDaemon(true);
+            pollThread.start();
+
+            // Stop polling when dialog is closed
+            dialog.setOnCloseRequest(ev -> {
+                polling[0] = false;
+            });
+
+            manualVerifyBtn.setOnAction(e -> {
+                manualVerifyBtn.setDisable(true);
+                statusLabel.setText("Verifying transaction status with bKash...");
+                runBackground(() -> bkash.executePayment(activePaymentId[0]), execRes -> {
+                    if (execRes.success) {
+                        polling[0] = false;
+                        donation.setTrxId(execRes.trxId);
+                        donation.setCustomerMsisdn(execRes.customerMsisdn);
+                        donation.setStatus("Completed");
+                        runBackground(() -> store.updateDonation(donation), () -> onPaymentSuccess.run());
+                    } else {
+                        runBackground(() -> bkash.queryPayment(activePaymentId[0]), queryRes -> {
+                            manualVerifyBtn.setDisable(false);
+                            if (queryRes.success && "Completed".equalsIgnoreCase(queryRes.transactionStatus)) {
+                                polling[0] = false;
+                                donation.setTrxId(queryRes.trxId);
+                                donation.setStatus("Completed");
+                                runBackground(() -> store.updateDonation(donation), () -> onPaymentSuccess.run());
+                            } else {
+                                statusLabel.setText("Status: " + (queryRes.success ? queryRes.transactionStatus : execRes.message));
+                            }
+                        });
+                    }
+                });
+            });
+
+            openLink(initResult.paymentUrl);
+        });
+
+        dialog.show();
     }
 
     // ----------------------------------------------------------- chatbot
