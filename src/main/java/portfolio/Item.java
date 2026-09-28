@@ -1,13 +1,18 @@
 package portfolio;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * One entry in the portfolio. A project, a research paper or an achievement.
  * Status is only meaningful for research papers, but it is stored for every item
  * so the file format stays uniform.
  *
  * id is -1 until the item has been saved to the database, at which point Store
- * fills in the real database id. attachmentPath holds just the file name inside
- * data/attachments (not a full path), or "" when there is no attachment.
+ * fills in the real database id. attachmentPath holds the file names (not full
+ * paths) inside data/attachments, separated by '|', or "" when there are none.
+ * Use getAttachments()/addAttachment()/removeAttachment() instead of touching the
+ * raw string; a single old-style file name is simply a list of one.
  */
 public class Item {
 
@@ -147,6 +152,33 @@ public class Item {
 
     public void setAttachmentPath(String attachmentPath) {
         this.attachmentPath = attachmentPath == null ? "" : attachmentPath;
+    }
+
+    private static final String ATTACHMENT_SEPARATOR = "|";
+
+    /** Every attached file name, in the order they were added. Never null. */
+    public List<String> getAttachments() {
+        List<String> result = new ArrayList<>();
+        for (String part : attachmentPath.split("\\|")) {
+            if (!part.isBlank()) {
+                result.add(part.trim());
+            }
+        }
+        return result;
+    }
+
+    public void addAttachment(String fileName) {
+        List<String> all = getAttachments();
+        if (fileName != null && !fileName.isBlank() && !all.contains(fileName)) {
+            all.add(fileName);
+        }
+        attachmentPath = String.join(ATTACHMENT_SEPARATOR, all);
+    }
+
+    public void removeAttachment(String fileName) {
+        List<String> all = getAttachments();
+        all.remove(fileName);
+        attachmentPath = String.join(ATTACHMENT_SEPARATOR, all);
     }
 
     /** Used by the search bar. An empty query matches everything. */

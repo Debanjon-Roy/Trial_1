@@ -607,23 +607,9 @@ public class PortfolioApp extends Application {
         detailCard.getStyleClass().add("section");
         UiEffects.apply3DTilt(detailCard);
 
-        if (!item.getAttachmentPath().isBlank()) {
-            Path file = ATTACHMENTS_DIR.resolve(item.getAttachmentPath());
-            if (Files.exists(file)) {
-                if (isImageFile(item.getAttachmentPath())) {
-                    ImageView iv = new ImageView(new Image(file.toUri().toString()));
-                    iv.setPreserveRatio(true);
-                    iv.setFitWidth(480);
-                    StackPane frame = new StackPane(iv);
-                    frame.getStyleClass().add("attachment-frame");
-                    detailCard.getChildren().add(frame);
-                } else {
-                    Button openFile = new Button("Open attached file (" + item.getAttachmentPath() + ")");
-                    openFile.getStyleClass().add("ghost-button");
-                    openFile.setOnAction(e -> openLink(file.toUri().toString()));
-                    detailCard.getChildren().add(openFile);
-                }
-            }
+        Node attachments = buildAttachments(item);
+        if (attachments != null) {
+            detailCard.getChildren().add(attachments);
         }
 
         if (!item.getLink().isBlank()) {
@@ -634,8 +620,8 @@ public class PortfolioApp extends Application {
         }
 
         if (ownerMode.get()) {
-            Button attach = new Button(item.getAttachmentPath().isBlank()
-                    ? "Attach a file (image or PDF)" : "Replace attached file");
+            Button attach = new Button(item.getAttachments().isEmpty()
+                    ? "Attach files (images or PDFs)" : "Add more files");
             attach.getStyleClass().add("ghost-button");
             attach.setOnAction(e -> chooseAndAttach(item));
             detailCard.getChildren().add(attach);
@@ -651,38 +637,132 @@ public class PortfolioApp extends Application {
         return page;
     }
 
+    /**
+     * Shows every attachment of an item: images as a clickable thumbnail grid,
+     * everything else (PDFs etc.) as a list of rows. In owner mode each one also
+     * gets a Remove button. Returns null when there is nothing to show.
+     */
+    private Node buildAttachments(Item item) {
+        FlowPane images = new FlowPane(14, 14);
+        VBox files = new VBox(8);
+
+        for (String name : item.getAttachments()) {
+            Path file = ATTACHMENTS_DIR.resolve(name);
+            if (!Files.exists(file)) {
+                continue;
+            }
+            Button remove = null;
+            if (ownerMode.get()) {
+                remove = new Button("Remove");
+                remove.getStyleClass().add("danger-button");
+                remove.setOnAction(e -> removeAttachment(item, name));
+            }
+
+            if (isImageFile(name)) {
+                // Downscaled and loaded in the background so many large photos stay light.
+                ImageView iv = new ImageView(new Image(file.toUri().toString(), 640, 0, true, true, true));
+                iv.setPreserveRatio(true);
+                iv.setFitWidth(300);
+                iv.setCursor(Cursor.HAND);
+                iv.setOnMouseClicked(e -> openLink(file.toUri().toString()));
+                StackPane frame = new StackPane(iv);
+                frame.getStyleClass().add("attachment-frame");
+                VBox cell = new VBox(6, frame);
+                cell.setAlignment(Pos.CENTER);
+                if (remove != null) {
+                    cell.getChildren().add(remove);
+                }
+                images.getChildren().add(cell);
+            } else {
+                Label label = new Label(displayName(name));
+                label.getStyleClass().add("card-text");
+                Button open = new Button("Open");
+                open.getStyleClass().add("ghost-button");
+                open.setOnAction(e -> openLink(file.toUri().toString()));
+                Region spacer = new Region();
+                HBox.setHgrow(spacer, Priority.ALWAYS);
+                HBox row = new HBox(10, label, spacer, open);
+                row.setAlignment(Pos.CENTER_LEFT);
+                if (remove != null) {
+                    row.getChildren().add(remove);
+                }
+                files.getChildren().add(row);
+            }
+        }
+
+        if (images.getChildren().isEmpty() && files.getChildren().isEmpty()) {
+            return null;
+        }
+        VBox box = new VBox(14);
+        if (!images.getChildren().isEmpty()) {
+            box.getChildren().add(images);
+        }
+        if (!files.getChildren().isEmpty()) {
+            box.getChildren().add(files);
+        }
+        return box;
+    }
+
+    /** "1790529219821_thesis.pdf" -> "thesis.pdf" (drops the uniqueness prefix). */
+    private String displayName(String storedName) {
+        return storedName.replaceFirst("^\\d+(_\\d+)?_", "");
+    }
+
     private boolean isImageFile(String filename) {
         String lower = filename.toLowerCase();
         return lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg")
                 || lower.endsWith(".gif") || lower.endsWith(".bmp");
     }
 
-    /** Runs the file copy and the database update off the FX thread; see runBackground(...). */
-    private void chooseAndAttach(Item item) {
+    private FileChooser attachmentChooser(String title) {
         FileChooser chooser = new FileChooser();
-        chooser.setTitle("Choose an image or PDF");
+        chooser.setTitle(title);
         chooser.getExtensionFilters().addAll(
                 new FileChooser.ExtensionFilter("Images and PDF", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.pdf"),
                 new FileChooser.ExtensionFilter("All files", "*.*"));
-        File chosen = chooser.showOpenDialog(stage);
-        if (chosen == null) {
+        return chooser;
+    }
+
+    /** Lets the owner pick any number of files at once and adds them to the item. */
+    private void chooseAndAttach(Item item) {
+        List<File> chosen = attachmentChooser("Choose images or PDFs (select as many as you like)")
+                .showOpenMultipleDialog(stage);
+        if (chosen == null || chosen.isEmpty()) {
+            return;
+        }
+        List<File> picked = new ArrayList<>(chosen);
+        runBackground(() -> {
+            for (File f : picked) {
+                item.addAttachment(storeAttachmentBlocking(f));
+            }
+            store.updateItem(item);
+        }, () -> openDetail(item));
+    }
+
+    private void removeAttachment(Item item, String name) {
+        if (!confirm("Remove \"" + displayName(name) + "\" from this entry?")) {
             return;
         }
         runBackground(() -> {
-            String stored = storeAttachmentBlocking(chosen);
-            item.setAttachmentPath(stored);
+            item.removeAttachment(name);
             store.updateItem(item);
+            try {
+                Files.deleteIfExists(ATTACHMENTS_DIR.resolve(name));
+            } catch (Exception ignored) {
+                // the entry no longer references it; a leftover file is harmless
+            }
         }, () -> openDetail(item));
     }
 
     /**
      * Copies the chosen file into data/attachments. Meant to be called only from
      * inside a background task (see runBackground) since it does blocking I/O.
+     * nanoTime keeps names unique even when several files are added at once.
      */
     private String storeAttachmentBlocking(File source) {
         try {
             Files.createDirectories(ATTACHMENTS_DIR);
-            String safeName = System.currentTimeMillis() + "_"
+            String safeName = System.currentTimeMillis() + "_" + (System.nanoTime() % 100000) + "_"
                     + source.getName().replaceAll("[^a-zA-Z0-9._-]", "_");
             Files.copy(source.toPath(), ATTACHMENTS_DIR.resolve(safeName), StandardCopyOption.REPLACE_EXISTING);
             return safeName;
@@ -1360,23 +1440,37 @@ public class PortfolioApp extends Application {
         TextField year = new TextField();
         year.setPromptText("2026 (optional)");
 
-        Button chooseFile = new Button("Choose file (optional)");
-        Label chosenFileLabel = new Label("No file chosen");
+        Button chooseFile = new Button("Choose files (optional)");
+        Button clearFiles = new Button("Clear");
+        clearFiles.getStyleClass().add("danger-button");
+        Label chosenFileLabel = new Label("No files chosen");
         chosenFileLabel.getStyleClass().add("card-text");
-        File[] chosenFile = new File[1];
+        List<File> chosenFiles = new ArrayList<>();
+        Runnable updateFileLabel = () -> {
+            clearFiles.setVisible(!chosenFiles.isEmpty());
+            clearFiles.setManaged(!chosenFiles.isEmpty());
+            chosenFileLabel.setText(chosenFiles.isEmpty() ? "No files chosen"
+                    : chosenFiles.size() == 1 ? chosenFiles.get(0).getName()
+                    : chosenFiles.size() + " files chosen");
+        };
+        updateFileLabel.run();
         chooseFile.setOnAction(e -> {
-            FileChooser chooser = new FileChooser();
-            chooser.setTitle("Choose an image or PDF (optional)");
-            chooser.getExtensionFilters().addAll(
-                    new FileChooser.ExtensionFilter("Images and PDF", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.pdf"),
-                    new FileChooser.ExtensionFilter("All files", "*.*"));
-            File chosen = chooser.showOpenDialog(stage);
-            if (chosen != null) {
-                chosenFile[0] = chosen;
-                chosenFileLabel.setText(chosen.getName());
+            List<File> picked = attachmentChooser("Choose images or PDFs (select as many as you like)")
+                    .showOpenMultipleDialog(stage);
+            if (picked != null) {
+                for (File f : picked) {
+                    if (!chosenFiles.contains(f)) {
+                        chosenFiles.add(f);
+                    }
+                }
+                updateFileLabel.run();
             }
         });
-        HBox fileRow = new HBox(10, chooseFile, chosenFileLabel);
+        clearFiles.setOnAction(e -> {
+            chosenFiles.clear();
+            updateFileLabel.run();
+        });
+        HBox fileRow = new HBox(10, chooseFile, chosenFileLabel, clearFiles);
         fileRow.setAlignment(Pos.CENTER_LEFT);
 
         GridPane form = new GridPane();
@@ -1413,10 +1507,10 @@ public class PortfolioApp extends Application {
         });
 
         dialog.showAndWait().ifPresent(item -> {
-            File attachment = chosenFile[0];
+            List<File> attachmentFiles = new ArrayList<>(chosenFiles);
             runBackground(() -> {
-                if (attachment != null) {
-                    item.setAttachmentPath(storeAttachmentBlocking(attachment));
+                for (File f : attachmentFiles) {
+                    item.addAttachment(storeAttachmentBlocking(f));
                 }
                 store.insertItem(item);
             }, () -> {
