@@ -1,0 +1,56 @@
+[33m5589d8e[m[33m ([m[1;36mHEAD[m[33m)[m HEAD@{2026-09-28 18:11:56 +0600}: commit (amend): Database added
+[33m0d3ba26[m HEAD@{2026-09-28 18:09:11 +0600}: rebase: fast-forward
+[33mdb14c6f[m HEAD@{2026-09-28 18:09:11 +0600}: rebase: fast-forward
+[33m34ae144[m HEAD@{2026-09-28 18:09:11 +0600}: rebase: fast-forward
+[33mcfb2e14[m HEAD@{2026-09-28 18:09:11 +0600}: rebase: fast-forward
+[33mf9334a0[m HEAD@{2026-09-28 18:09:11 +0600}: rebase: fast-forward
+[33mbed639e[m HEAD@{2026-09-28 18:09:11 +0600}: rebase (start): checkout bed639ed145de4263afa9048e90a98306d3f08eb
+[33mf5444dd[m[33m ([m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmaster[m[33m)[m HEAD@{2026-09-28 18:01:21 +0600}: rebase (abort): returning to refs/heads/master
+[33mf5444dd[m[33m ([m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmaster[m[33m)[m HEAD@{2026-09-28 18:01:21 +0600}: rebase (abort): returning to refs/heads/master
+[33mf5444dd[m[33m ([m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmaster[m[33m)[m HEAD@{2026-09-28 18:00:17 +0600}: rebase (abort): returning to refs/heads/master
+[33mf5444dd[m[33m ([m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmaster[m[33m)[m HEAD@{2026-09-28 18:00:17 +0600}: rebase (abort): returning to refs/heads/master
+[33mf5444dd[m[33m ([m[1;31morigin/master[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmaster[m[33m)[m HEAD@{2026-09-28 17:54:43 +0600}: commit: Fixed screen flickering issues
+[33m2a8468f[m HEAD@{2026-09-28 15:53:35 +0600}: commit: Added bkash api features
+[33mc4b3368[m HEAD@{2026-09-28 07:25:43 +0600}: commit: Added the option to add multiple photos and pdfs
+[33md78276d[m HEAD@{2026-09-28 00:01:48 +0600}: commit: Add secure API key handling and update model
+[33mb6183e3[m HEAD@{2026-09-27 23:59:09 +0600}: reset: moving to origin/master
+[33m4be373d[m HEAD@{2026-09-27 23:45:25 +0600}: commit (amend): Add secure API key handling and update model
+[33mb6183e3[m HEAD@{2026-09-27 23:39:10 +0600}: commit: Add secure API key handling and update model
+[33m65d3c1c[m HEAD@{2026-09-27 23:38:47 +0600}: reset: moving to 65d3c1c
+[33m3795ee9[m HEAD@{2026-09-27 23:36:13 +0600}: rebase (abort): returning to refs/heads/master
+[33m3795ee9[m HEAD@{2026-09-27 23:36:13 +0600}: rebase (abort): returning to refs/heads/master
+[33m3795ee9[m HEAD@{2026-09-27 23:34:50 +0600}: rebase (abort): returning to refs/heads/master
+[33m3795ee9[m HEAD@{2026-09-27 23:34:50 +0600}: rebase (abort): returning to refs/heads/master
+[33m3795ee9[m HEAD@{2026-09-27 23:25:59 +0600}: revert: Reapply "Fixed api related issues"
+[33m9b366a4[m HEAD@{2026-09-27 23:25:58 +0600}: revert: Reapply "Edited gemini api issues"
+[33m64cca8a[m HEAD@{2026-09-27 23:25:57 +0600}: revert: Reapply "Edited gemini api issues"
+[33mfeaab00[m HEAD@{2026-09-27 23:25:56 +0600}: revert: Reapply "Added Gemini API key"
+[33m9e990f2[m HEAD@{2026-09-27 23:24:09 +0600}: revert: Revert "Added Gemini API key"
+[33m31e4530[m HEAD@{2026-09-27 23:24:07 +0600}: revert: Revert "Edited gemini api issues"
+[33m864b2cf[m HEAD@{2026-09-27 23:24:06 +0600}: revert: Revert "Edited gemini api issues"
+[33m6826223[m HEAD@{2026-09-27 23:24:06 +0600}: revert: Revert "Fixed api related issues"
+[33mf1a4e23[m HEAD@{2026-09-27 23:20:56 +0600}: commit: Fixed api related issues
+[33m62a9c50[m HEAD@{2026-09-27 23:16:10 +0600}: commit: Edited gemini api issues
+[33m5569e65[m HEAD@{2026-09-27 22:56:21 +0600}: commit: Edited gemini api issues
+[33m7b73bb5[m HEAD@{2026-09-27 18:30:06 +0600}: commit: Added Gemini API key
+[33m65d3c1c[m HEAD@{2026-09-27 18:18:22 +0600}: commit: Added chatbot and Changed model for better performance
+[33mfed34e3[m HEAD@{2026-09-27 18:03:45 +0600}: reset: moving to origin/master
+[33m7ffdc03[m HEAD@{2026-09-27 17:31:23 +0600}: commit: Changed model for better performance
+[33m1f4b35c[m HEAD@{2026-09-27 17:15:52 +0600}: commit: Added Chatbot
+[33mfed34e3[m HEAD@{2026-09-27 16:03:53 +0600}: commit: Improved UI
+[33ma977478[m HEAD@{2026-09-27 15:37:35 +0600}: commit: Improved UI
+[33maa4e579[m HEAD@{2026-09-27 15:30:28 +0600}: commit: Changed UI
+[33m3cf8949[m HEAD@{2026-09-27 00:44:23 +0600}: commit: Fixed an issue with profile picture not loading
+[33m2090a30[m HEAD@{2026-09-27 00:36:55 +0600}: commit: Debugged profile.java
+[33m445a6e0[m HEAD@{2026-09-27 00:25:51 +0600}: commit: Separated profile details
+[33m3886190[m HEAD@{2026-09-27 00:18:58 +0600}: commit: Added concurrency
+[33m4e107a9[m HEAD@{2026-09-26 12:38:51 +0600}: commit: Improved editing option and added the feature of changing password
+[33m106f08e[m HEAD@{2026-09-26 12:24:32 +0600}: commit: Added editing option
+[33m245e4db[m HEAD@{2026-09-26 01:53:31 +0600}: commit: Added special effect to cursor
+[33m773dd3c[m HEAD@{2026-09-26 00:52:27 +0600}: commit: Onclick properties added
+[33m2eefc72[m HEAD@{2026-09-25 20:03:00 +0600}: commit: Navigation bar added
+[33m0d3ba26[m HEAD@{2026-09-25 19:44:58 +0600}: commit: Database added
+[33mdb14c6f[m HEAD@{2026-09-23 20:21:55 +0600}: commit: photo added
+[33m34ae144[m HEAD@{2026-09-23 20:19:37 +0600}: commit: photo added
+[33mcfb2e14[m HEAD@{2026-09-23 20:15:41 +0600}: commit: photo added
+[33mf9334a0[m HEAD@{2026-09-23 07:45:39 +0600}: commit (initial): First commit
