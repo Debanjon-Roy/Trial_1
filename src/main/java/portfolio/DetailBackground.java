@@ -24,6 +24,7 @@ import java.util.Random;
 public class DetailBackground extends Pane {
 
     private static final Random RNG = new Random();
+    private static final long FRAME_INTERVAL_NANOS = 1_000_000_000L / 30;
 
     private final Canvas canvas = new Canvas();
     private AnimationTimer timer;
@@ -44,6 +45,16 @@ public class DetailBackground extends Pane {
 
         widthProperty().addListener((obs, oldW, newW) -> canvas.setWidth(newW.doubleValue()));
         heightProperty().addListener((obs, oldH, newH) -> canvas.setHeight(newH.doubleValue()));
+
+        visibleProperty().addListener((obs, wasVisible, isVisible) -> {
+            if (isVisible) {
+                if (timer == null) {
+                    startAnimation();
+                }
+            } else {
+                stopAnimation();
+            }
+        });
     }
 
     public void setMode(Item.Type type) {
@@ -92,7 +103,12 @@ public class DetailBackground extends Pane {
                     lastNano = now;
                     return;
                 }
-                double dt = (now - lastNano) / 1_000_000_000.0;
+                // Cap the frame rate: without this it redraws at the monitor's full
+                // refresh rate, which starves the UI thread and makes clicks feel frozen.
+                if (now - lastNano < FRAME_INTERVAL_NANOS) {
+                    return;
+                }
+                double dt = Math.min((now - lastNano) / 1_000_000_000.0, 0.1);
                 lastNano = now;
                 time += dt;
 

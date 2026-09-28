@@ -57,6 +57,17 @@ public class FireBackground extends Pane {
             embers.add(e);
         }
 
+        // Don't burn CPU drawing flames nobody can see (e.g. while a detail page covers them).
+        visibleProperty().addListener((obs, wasVisible, isVisible) -> {
+            if (isVisible) {
+                if (timer == null) {
+                    startAnimation();
+                }
+            } else {
+                stopAnimation();
+            }
+        });
+
         startAnimation();
     }
 

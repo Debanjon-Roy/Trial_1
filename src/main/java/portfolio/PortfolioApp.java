@@ -1994,6 +1994,10 @@ public class PortfolioApp extends Application {
     }
 
     private void applyStylesheet(Dialog<?> dialog) {
+        // Tie every dialog to the main window so it stays on top of it and blocks it properly.
+        if (stage != null && dialog.getOwner() == null) {
+            dialog.initOwner(stage);
+        }
         URL css = getClass().getResource("/style.css");
         if (css != null) {
             dialog.getDialogPane().getStylesheets().add(css.toExternalForm());

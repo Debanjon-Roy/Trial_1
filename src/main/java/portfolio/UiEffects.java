@@ -13,11 +13,14 @@ import javafx.geometry.Point2D;
 import javafx.scene.Node;
 import javafx.scene.effect.BlurType;
 import javafx.scene.effect.DropShadow;
+import javafx.scene.effect.PerspectiveTransform;
+import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.SimpleDoubleProperty;
+import javafx.geometry.Bounds;
 import javafx.scene.effect.Glow;
 import javafx.scene.layout.Pane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
-import javafx.scene.transform.Rotate;
 import javafx.util.Duration;
 
 import java.util.ArrayList;
@@ -37,66 +40,100 @@ public final class UiEffects {
     private UiEffects() {}
 
     /**
-     * Applies a true 3D tilt effect and dynamic specular lighting to any JavaFX Node.
-     * As the mouse hovers and moves across the node, the node tilts in 3D perspective
-     * towards the cursor and casts a dynamic directional glow shadow.
+     * Applies a tilt-toward-the-cursor effect with a dynamic directional glow to any Node.
+     *
+     * The tilt is a 2D PerspectiveTransform effect, NOT real 3D Rotate transforms. That is
+     * deliberate: as soon as a node inside a ScrollPane carries a 3D rotation, JavaFX stops
+     * clipping the scrolled content, and hovered cards/sections then paint over the header
+     * and nav bar. A 2D effect looks the same but keeps the scroll clipping intact.
      */
     public static void apply3DTilt(Node node) {
-        Rotate rotateX = new Rotate(0, Rotate.X_AXIS);
-        Rotate rotateY = new Rotate(0, Rotate.Y_AXIS);
-        node.getTransforms().addAll(rotateX, rotateY);
-
         DropShadow restingShadow = new DropShadow(BlurType.GAUSSIAN, Color.rgb(40, 2, 0, 0.40), 16, 0.15, 0, 6);
         node.setEffect(restingShadow);
 
+        PerspectiveTransform tilt = new PerspectiveTransform();
+        DropShadow glow = new DropShadow(BlurType.GAUSSIAN, Color.rgb(255, 140, 60, 0.48), 24, 0.28, 0, 4);
+        glow.setInput(tilt);
+
+        // Cursor position across the node, each from -1.0 to 1.0.
+        DoubleProperty tiltX = new SimpleDoubleProperty(0);
+        DoubleProperty tiltY = new SimpleDoubleProperty(0);
+
+        Runnable render = () -> {
+            Bounds b = node.getLayoutBounds();
+            double x0 = b.getMinX();
+            double y0 = b.getMinY();
+            double w = b.getWidth();
+            double h = b.getHeight();
+            if (w <= 0 || h <= 0) {
+                return;
+            }
+            double nx = tiltX.get();
+            double ny = tiltY.get();
+
+            // The edge nearest the cursor recedes slightly, like a card being pressed.
+            double insetX = Math.min(w * 0.010, 9);
+            double insetY = Math.min(h * 0.010, 9);
+            double top = Math.max(0, -ny);
+            double bottom = Math.max(0, ny);
+            double left = Math.max(0, -nx);
+            double right = Math.max(0, nx);
+
+            tilt.setUlx(x0 + insetX * top);
+            tilt.setUly(y0 + insetY * left);
+            tilt.setUrx(x0 + w - insetX * top);
+            tilt.setUry(y0 + insetY * right);
+            tilt.setLrx(x0 + w - insetX * bottom);
+            tilt.setLry(y0 + h - insetY * right);
+            tilt.setLlx(x0 + insetX * bottom);
+            tilt.setLly(y0 + h - insetY * left);
+
+            // Glow shifts away from the cursor, simulating a light source.
+            glow.setOffsetX(-nx * 8.0);
+            glow.setOffsetY(-ny * 8.0 + 4);
+        };
+        tiltX.addListener((o, a, b) -> render.run());
+        tiltY.addListener((o, a, b) -> render.run());
+
+        Timeline[] reset = new Timeline[1];
+
         node.setOnMouseMoved(e -> {
-            double w = node.getBoundsInLocal().getWidth();
-            double h = node.getBoundsInLocal().getHeight();
-            if (w <= 0 || h <= 0) return;
-
-            rotateX.setPivotX(w / 2.0);
-            rotateX.setPivotY(h / 2.0);
-            rotateY.setPivotX(w / 2.0);
-            rotateY.setPivotY(h / 2.0);
-
-            // Normalized position (-1.0 to 1.0)
+            if (reset[0] != null) {
+                reset[0].stop();
+            }
+            double w = node.getLayoutBounds().getWidth();
+            double h = node.getLayoutBounds().getHeight();
+            if (w <= 0 || h <= 0) {
+                return;
+            }
             double nx = (e.getX() - w / 2.0) / (w / 2.0);
             double ny = (e.getY() - h / 2.0) / (h / 2.0);
-            nx = Math.max(-1.0, Math.min(1.0, nx));
-            ny = Math.max(-1.0, Math.min(1.0, ny));
+            tiltX.set(Math.max(-1.0, Math.min(1.0, nx)));
+            tiltY.set(Math.max(-1.0, Math.min(1.0, ny)));
+            render.run();
 
-            // Perspective angles
-            double maxAngle = 6.5;
-            rotateX.setAngle(-ny * maxAngle);
-            rotateY.setAngle(nx * maxAngle);
-
-            // Pop out slightly in 3D space
+            // Pop out slightly
             node.setScaleX(1.018);
             node.setScaleY(1.018);
-
-            // Dynamic directional glow shadow simulating light source
-            DropShadow dynamicGlow = new DropShadow(
-                    BlurType.GAUSSIAN,
-                    Color.rgb(255, 140, 60, 0.48),
-                    24,
-                    0.28,
-                    -nx * 8.0,
-                    -ny * 8.0 + 4
-            );
-            node.setEffect(dynamicGlow);
+            if (node.getEffect() != glow) {
+                node.setEffect(glow);
+            }
         });
 
         node.setOnMouseExited(e -> {
-            Timeline reset = new Timeline(
+            if (reset[0] != null) {
+                reset[0].stop();
+            }
+            reset[0] = new Timeline(
                     new KeyFrame(Duration.millis(320),
-                            new KeyValue(rotateX.angleProperty(), 0, Interpolator.EASE_OUT),
-                            new KeyValue(rotateY.angleProperty(), 0, Interpolator.EASE_OUT),
+                            new KeyValue(tiltX, 0, Interpolator.EASE_OUT),
+                            new KeyValue(tiltY, 0, Interpolator.EASE_OUT),
                             new KeyValue(node.scaleXProperty(), 1.0, Interpolator.EASE_OUT),
                             new KeyValue(node.scaleYProperty(), 1.0, Interpolator.EASE_OUT)
                     )
             );
-            reset.setOnFinished(ev -> node.setEffect(restingShadow));
-            reset.play();
+            reset[0].setOnFinished(ev -> node.setEffect(restingShadow));
+            reset[0].play();
         });
     }
 
